@@ -31,7 +31,7 @@
       },
       "algorithm": "mappo",
       "checkpoint_end": true,
-      "checkpoint_freq": 50,
+      "checkpoint_freq": 10,
       "env": "mpe",
       "env_args": {
         "continuous_actions": false,
@@ -40,13 +40,14 @@
       },
       "episode_limit": 25,
       "evaluation_interval": 10,
-      "force_coop": false,
+      "force_coop": true,
       "framework": "torch",
       "global_state_flag": false,
+      "local_dir": "",
       "local_mode": false,
       "mask_flag": false,
       "model_arch_args": {
-        "core_arch": "mlp",
+        "core_arch": "gru",
         "encode_layer": "128-256",
         "fc_layer": 2,
         "hidden_state_size": 256,
@@ -133,7 +134,10 @@
           ]
         }
       },
-      "restore_path": "",
+      "restore_path": {
+        "model_path": "",
+        "params_path": ""
+      },
       "seed": 321,
       "share_policy": "all",
       "space_act": "Discrete(5)",
@@ -145,7 +149,7 @@
   },
   "multiagent": {
     "policies": "{'av'}",
-    "policy_mapping_fn": "<function run_cc.<locals>.<lambda> at 0x7f1ab04bbb70>"
+    "policy_mapping_fn": "<function run_cc.<locals>.<lambda> at 0x7f2654180158>"
   },
   "num_gpus": 1,
   "num_gpus_per_worker": 0,
