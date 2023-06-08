@@ -1,9 +1,9 @@
 {
-  "batch_mode": "complete_episodes",
+  "batch_mode": "truncate_episodes",
   "clip_param": 0.3,
   "entropy_coeff": 0.01,
   "env": "mpe_simple_spread",
-  "evaluation_interval": 10,
+  "evaluation_interval": 50,
   "framework": "torch",
   "kl_coeff": 0.2,
   "lambda": 1.0,
@@ -11,6 +11,7 @@
   "model": {
     "custom_model": "Centralized_Critic_Model",
     "custom_model_config": {
+      "agent_level_batch_update": false,
       "agent_name_ls": [
         "agent_0",
         "agent_1",
@@ -18,7 +19,7 @@
       ],
       "algo_args": {
         "batch_episode": 128,
-        "batch_mode": "complete_episodes",
+        "batch_mode": "truncate_episodes",
         "clip_param": 0.3,
         "entropy_coeff": 0.01,
         "kl_coeff": 0.2,
@@ -31,7 +32,7 @@
       },
       "algorithm": "mappo",
       "checkpoint_end": true,
-      "checkpoint_freq": 10,
+      "checkpoint_freq": 500,
       "env": "mpe",
       "env_args": {
         "continuous_actions": false,
@@ -39,7 +40,7 @@
         "max_cycles": 25
       },
       "episode_limit": 25,
-      "evaluation_interval": 10,
+      "evaluation_interval": 50,
       "force_coop": true,
       "framework": "torch",
       "global_state_flag": false,
@@ -47,7 +48,7 @@
       "local_mode": false,
       "mask_flag": false,
       "model_arch_args": {
-        "core_arch": "gru",
+        "core_arch": "mlp",
         "encode_layer": "128-256",
         "fc_layer": 2,
         "hidden_state_size": 256,
@@ -58,7 +59,7 @@
       "num_cpus_per_worker": 1,
       "num_gpus": 1,
       "num_gpus_per_worker": 0,
-      "num_workers": 5,
+      "num_workers": 10,
       "opp_action_in_cc": true,
       "policy_mapping_info": {
         "simple_adversary": {
@@ -148,13 +149,13 @@
     }
   },
   "multiagent": {
-    "policies": "{'av'}",
-    "policy_mapping_fn": "<function run_cc.<locals>.<lambda> at 0x7f2654180158>"
+    "policies": "{'shared_policy'}",
+    "policy_mapping_fn": "<function run_cc.<locals>.<lambda> at 0x7f4bada5fd08>"
   },
   "num_gpus": 1,
   "num_gpus_per_worker": 0,
   "num_sgd_iter": 10,
-  "num_workers": 5,
+  "num_workers": 10,
   "seed": 321,
   "sgd_minibatch_size": 3200,
   "simple_optimizer": false,
