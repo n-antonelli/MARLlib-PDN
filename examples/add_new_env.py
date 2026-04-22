@@ -122,14 +122,28 @@ class RLlibMAGym(MultiAgentEnv):
 
 
 if __name__ == '__main__':
+    ######## Entornos ########
+    # Nuevo --> magym
     # register new env
-    ENV_REGISTRY["magym"] = RLlibMAGym
+    # ENV_REGISTRY["magym"] = RLlibMAGym
     # initialize env
-    env = marl.make_env(environment_name="magym", map_name="Checkers", abs_path="../../examples/config/env_config/magym.yaml")
-    # pick mappo algorithms
-    mappo = marl.algos.mappo(hyperparam_source="test")
+    # env = marl.make_env(environment_name="magym", map_name="Checkers", abs_path="C:\\Users\\Usuario\\Documents\\Programas\\MARLlib\\examples\\config\\env_config\\magym.yaml")
+    # MPE
+    # env = marl.make_env(environment_name="mpe", map_name="simple_spread", force_coop=True)
+    # Power Distribution Networks
+    env = marl.make_env(environment_name="voltage", map_name="case33_3min_final")  # case33_3min_final / case141_3min_final / case322_3min_final
+
+    ######## algoritmos ########
+    algoritmo = "mappo"
+    eleccion = {"mappo": marl.algos.mappo,
+                "ippo": marl.algos.ippo,
+                "vdppo": marl.algos.vdppo
+                }
+    # pick algorithms
+    algo = eleccion[algoritmo](hyperparam_source="test")
     # customize model
-    model = marl.build_model(env, mappo, {"core_arch": "mlp", "encode_layer": "128-128"})
+    model = marl.build_model(env, algo, {"core_arch": "mlp", "encode_layer": "128-128"})
+    print(env)
     # start learning
-    mappo.fit(env, model, stop={'episode_reward_mean': 2000, 'timesteps_total': 10000000}, local_mode=True, num_gpus=1,
-              num_workers=2, share_policy='all', checkpoint_freq=50)
+    algo.fit(env, model, stop={'episode_reward_mean': -1, 'timesteps_total': 10000000}, local_mode=True, num_gpus=0,  # 'episode_reward_mean': 2000
+             num_workers=1, num_envs_per_worker=1, share_policy='individual', checkpoint_freq=100, num_to_keep=2)  # num_workers=2

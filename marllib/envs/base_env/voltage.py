@@ -27,15 +27,23 @@ from gym.spaces import Dict as GymDict, Box
 import os
 
 policy_mapping_dict = {
-    "all_scenario": {
-        "description": "voltage control all scenarios",
-        "team_prefix": ("agent_",),
-        "all_agents_one_policy": True,
+    # "all_scenario": {
+    #     "description": "voltage control all scenarios",
+    #     "team_prefix": ("agent_",),
+    #     "all_agents_one_policy": True,
+    #     "one_agent_one_policy": True,
+    # },
+    "case33_3min_final": {
+        "description": "voltage control custom",
+        "team_prefix": ('pv0', 'pv1', 'pv2', 'pv3', 'pv4', 'pv5'), # para distributed --> , 'pv4', 'pv5'),
+        "all_agents_one_policy": False,
         "one_agent_one_policy": True,
-    },
+    }
 }
 
-global_data_source_path = os.getcwd()
+# global_data_source_path = os.getcwd()
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, "../../.."))
 max_steps = 1000
 
 
@@ -63,9 +71,9 @@ class RLlibVoltageControl(MultiAgentEnv):
             env_config["action_scale"] = 0.8
 
         # define control mode and voltage barrier function
-        env_config["mode"] = 'distributed'
+        env_config["mode"] = 'decentralised'  # distributed-->cada panel tiene un agente / decentralised-->cada zona tiene un agente (puede tener varios paneles/acciones)
         env_config["voltage_barrier_type"] = 'l1'
-        env_config["data_path"] = os.path.join(global_data_source_path, "marllib/patch/dpn/var_voltage_control/data",
+        env_config["data_path"] = os.path.join(project_root, "marllib\\patch\\dpn\\var_voltage_control\\data", #"marllib/patch/dpn/var_voltage_control/data",
                                                net_topology)
         self.env = VoltageControl(env_config)
 

@@ -422,4 +422,23 @@ Works that are based on or closely collaborate with MARLlib <[link](https://gith
 }
 ```
 
+26.04.22
+distributed: each zone is equipped with several PV generators and each PV generator is an agent
+decentralised: each zone is controlled by an agent and each agent may have variant number of actions
 
+action_dict tiene solo 4 acciones, pero hay agentes que deberían tener 2 acciones
+    def step(self, action_dict):
+        action = [value[0] for value in action_dict.values()]
+        r, d, info = self.env.step(action)
+        o = self.env.get_obs()
+        s = self.env.get_state()
+        rewards = {}
+        obs = {}
+        for index, agent in enumerate(self.agents):
+            obs[agent] = {
+                "obs": np.float32(o[index]),
+                "state": np.float32(s),
+            }
+            rewards[agent] = r
+        dones = {"__all__": d}
+        return obs, rewards, dones, {}

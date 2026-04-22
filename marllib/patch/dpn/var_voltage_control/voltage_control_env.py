@@ -68,7 +68,7 @@ class VoltageControl(MultiAgentEnv):
         # define constraints and uncertainty
         self.v_upper = getattr(args, "v_upper", 1.05)
         self.v_lower = getattr(args, "v_lower", 0.95)
-        self.active_demand_std = self.active_demand_data.values.std(axis=0) / 100.0
+        self.active_demand_std = self.active_demand_data.values.std(axis=0) / 100.0  # TODO: Porqué el 100?
         self.reactive_demand_std = self.reactive_demand_data.values.std(axis=0) / 100.0
         self.pv_std = self.pv_data.values.std(axis=0) / 100.0
         self._set_reactive_power_boundary()
@@ -82,7 +82,7 @@ class VoltageControl(MultiAgentEnv):
             self.n_agents = len(self.base_powergrid.sgen)
         elif self.args.mode == "decentralised":
             self.n_actions = len(self.base_powergrid.sgen)
-            self.n_agents = len( set( self.base_powergrid.bus["zone"].to_numpy(copy=True) ) ) - 1 # exclude the main zone
+            self.n_agents = len(set(self.base_powergrid.bus["zone"].to_numpy(copy=True))) - 1  # exclude the main zone
         agents_obs, state = self.reset()
 
         self.obs_size = agents_obs[0].shape[0]
@@ -125,12 +125,12 @@ class VoltageControl(MultiAgentEnv):
                 pp.runpp(self.powergrid)
                 solvable = True
             except ppException:
-                # print ("The power flow for the initialisation of demand and PV cannot be solved.")
-                # print (f"This is the pv: \n{self.powergrid.sgen['p_mw']}")
-                # print (f"This is the q: \n{self.powergrid.sgen['q_mvar']}")
-                # print (f"This is the active demand: \n{self.powergrid.load['p_mw']}")
-                # print (f"This is the reactive demand: \n{self.powergrid.load['q_mvar']}")
-                # print (f"This is the res_bus: \n{self.powergrid.res_bus}")
+                print ("The power flow for the initialisation of demand and PV cannot be solved.")
+                print (f"This is the pv: \n{self.powergrid.sgen['p_mw']}")
+                print (f"This is the q: \n{self.powergrid.sgen['q_mvar']}")
+                print (f"This is the active demand: \n{self.powergrid.load['p_mw']}")
+                print (f"This is the reactive demand: \n{self.powergrid.load['q_mvar']}")
+                print (f"This is the res_bus: \n{self.powergrid.res_bus}")
                 solvable = False
 
         return self.get_obs(), self.get_state()
@@ -206,8 +206,8 @@ class VoltageControl(MultiAgentEnv):
             terminated = True
         else:
             terminated = False
-        # if terminated:
-        #     print (f"Episode terminated at time: {self.steps} with return: {self.sum_rewards:2.4f}.")
+        if terminated:
+            print (f"Episode terminated at time: {self.steps} with return: {self.sum_rewards:2.4f}.")
 
         return reward, terminated, info
 
@@ -241,7 +241,7 @@ class VoltageControl(MultiAgentEnv):
             obs_zone_dict = dict()
             zone_list = list()
             obs_len_list = list()
-            for i in range(len(self.powergrid.sgen)):
+            for i in range(len(self.powergrid.sgen)):  # Para cada panel solar
                 obs = list()
                 zone_buses, zone, pv, q, sgen_bus = clusters[f"sgen{i}"]
                 zone_list.append(zone)
@@ -272,7 +272,7 @@ class VoltageControl(MultiAgentEnv):
         elif self.args.mode == "decentralised":
             obs_len_list = list()
             zone_obs_list = list()
-            for i in range(self.n_agents):
+            for i in range(self.n_agents):  # Para cada agente
                 zone_buses, pv, q, sgen_buses = clusters[f"zone{i+1}"]
                 obs = list()
                 if "demand" in self.state_space:
@@ -516,7 +516,7 @@ class VoltageControl(MultiAgentEnv):
         self.factor = 1.2
         self.p_max = self.pv_data.to_numpy(copy=True).max(axis=0)
         self.s_max = self.factor * self.p_max
-        # print (f"This is the s_max: \n{self.s_max}")
+        print (f"This is the s_max: \n{self.s_max}")
 
     def _get_clusters_info(self):
         """return the clusters of info
@@ -524,7 +524,7 @@ class VoltageControl(MultiAgentEnv):
         distributed: each zone is equipped with several PV generators and each PV generator is an agent
         decentralised: each zone is controlled by an agent and each agent may have variant number of actions
         """
-        clusters = dict()
+        clusters = dict()  # zone_res_buses, pv, q, sgen_res_buses
         if self.args.mode == "distributed":
             for i in range(len(self.powergrid.sgen)):
                 zone = self.powergrid.sgen["name"][i]
@@ -548,6 +548,8 @@ class VoltageControl(MultiAgentEnv):
         the control variables we consider are the exact reactive power
         of each distributed generator
         """
+        # Calcula la potencia reactiva en base a la potencia aparente máxima y la potencia activa actual.
+        # La multiplica por las acciones
         self.powergrid.sgen["q_mvar"] = self._clip_reactive_power(actions, self.powergrid.sgen["p_mw"])
 
         # solve power flow to get the latest voltage with new reactive power and old deamnd and PV active power
@@ -596,17 +598,18 @@ class VoltageControl(MultiAgentEnv):
         # line loss
         line_loss = np.sum(self.powergrid.res_line["pl_mw"])
         avg_line_loss = np.mean(self.powergrid.res_line["pl_mw"])
-        info["total_line_loss"] = line_loss
+        info["total_line_loss"] = line_loss  # Total de pérdida potencia activa en la línea
 
         # reactive power (q) loss
         q = self.powergrid.res_sgen["q_mvar"].sort_index().to_numpy(copy=True)
         q_loss = np.mean(np.abs(q))
-        info["q_loss"] = q_loss
+        info["q_loss"] = q_loss  # Promedio de potencia reactiva
 
         # reward function
         ## voltage barrier function
         v_loss = np.mean(self.voltage_barrier.step(v)) * self.voltage_weight
         ## add soft constraint for line or q
+        # Se puede agregar loss de la línea o el loss de potencia reactiva
         if self.line_weight != None:
             loss = avg_line_loss * self.line_weight + v_loss
         elif self.q_weight != None:
