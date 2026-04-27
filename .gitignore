@@ -174,3 +174,4 @@ __pycache__/
 data/
 outputs/
 *.log
+examples/
