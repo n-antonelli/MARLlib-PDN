@@ -130,7 +130,7 @@ class RLlibVoltageControl(MultiAgentEnv):
         # Espacio de observación y de acción dferentes
         #### observaciones
         self.new_agents = []
-        agents
+        # agents =
         # self.agents = env_config["agents"]
         # for a in self.agents:
         #     # Top-level name argument overrides a name in the config.  The
