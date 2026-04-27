@@ -174,4 +174,4 @@ __pycache__/
 data/
 outputs/
 *.log
-examples/
+examples/exp_results/
