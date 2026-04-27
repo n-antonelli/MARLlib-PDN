@@ -102,33 +102,35 @@ class RLlibVoltageControl(MultiAgentEnv):
         env_config["data_path"] = os.path.join(project_root, "marllib\\patch\\dpn\\var_voltage_control\\data", #"marllib/patch/dpn/var_voltage_control/data",
                                                net_topology)
         self.env = VoltageControl(env_config)
+        self.num_agents = self.env.get_num_of_agents()
         ###############
-        # espacio de acción iguales
-        self.agent_pv_map = {}
-        # Para saber cuántos PVs tiene la zona con más paneles para que el Action Space sea lo suficientemente grande.
-        zone_ids = self.env.base_powergrid.bus.zone.unique()
-        # Excluimos la zona 0 si es la main zone
-        zone_ids = [z for z in zone_ids if z != 'main']
-        for i, zone in enumerate(sorted(zone_ids)):
-            agent_id = f"agent_{i}"
-            # Buscamos qué sgen (paneles) están en buses de esta zona
-            buses_in_zone = self.env.base_powergrid.bus[self.env.base_powergrid.bus.zone == zone].index
-            pvs_indices = self.env.base_powergrid.sgen[self.env.base_powergrid.sgen.bus.isin(buses_in_zone)].index.tolist()
-            self.agent_pv_map[agent_id] = pvs_indices
+        # # espacio de acción iguales
+        # self.agent_pv_map = {}
+        # # Para saber cuántos PVs tiene la zona con más paneles para que el Action Space sea lo suficientemente grande.
+        # zone_ids = self.env.base_powergrid.bus.zone.unique()
+        # # Excluimos la zona 0 si es la main zone
+        # zone_ids = [z for z in zone_ids if z != 'main']
+        # for i, zone in enumerate(sorted(zone_ids)):
+        #     agent_id = f"agent_{i}"
+        #     # Buscamos qué sgen (paneles) están en buses de esta zona
+        #     buses_in_zone = self.env.base_powergrid.bus[self.env.base_powergrid.bus.zone == zone].index
+        #     pvs_indices = self.env.base_powergrid.sgen[self.env.base_powergrid.sgen.bus.isin(buses_in_zone)].index.tolist()
+        #     self.agent_pv_map[agent_id] = pvs_indices
+        #
+        #     # 2. Definimos el espacio de acción según el que más tenga (ej. 2)
+        # self.max_pvs = max(len(indices) for indices in self.agent_pv_map.values())
+        # self.action_space = Box(
+        #     self.env.action_space.low,
+        #     self.env.action_space.high,
+        #     shape=(self.max_pvs,),
+        #     dtype=np.float32
+        # )
 
-            # 2. Definimos el espacio de acción según el que más tenga (ej. 2)
-        self.max_pvs = max(len(indices) for indices in self.agent_pv_map.values())
-        self.action_space = Box(
-            self.env.action_space.low,
-            self.env.action_space.high,
-            shape=(self.max_pvs,),
-            dtype=np.float32
-        )
 
-
-        # # Espacio de observación y de acción dferentes
-        # #### observaciones
-        # self.new_agents = []
+        # Espacio de observación y de acción dferentes
+        #### observaciones
+        self.new_agents = []
+        agents
         # self.agents = env_config["agents"]
         # for a in self.agents:
         #     # Top-level name argument overrides a name in the config.  The
@@ -140,37 +142,37 @@ class RLlibVoltageControl(MultiAgentEnv):
         #     # Call the constructor and append to the agent list.
         #     new_agent = a["cls"](name=a["name"], **_config, **env_config["common_config"])
         #     self.new_agents.append(new_agent)
-        # local_dims = [flat_dim(ag.observation_space) for ag in self.new_agents]
-        # state_dim = sum(local_dims)
-        # self.observation_space = GymDict({})
-        # for i, agent in enumerate(self.new_agents):
-        #     loc_dim = local_dims[i]
-        #     # Box para la obs local
-        #     obs_box = Box(low=-100.0, high=100.0, shape=(loc_dim,), dtype=np.float64)
-        #     # Box para el state global (idéntico para todos los agentes)
-        #     state_box = Box(low=-100.0, high=100.0, shape=(state_dim,), dtype=np.float64)
-        #     self.observation_space[agent.name] = GymDict({
-        #         "obs": obs_box,
-        #         "state": state_box,
-        #     })
-        # ###### acciones
-        # self.action_space = GymDict({})
-        # local_dims_act = [flat_dim(ag.action_space) for ag in self.new_agents]
-        # for i, agent in enumerate(self.new_agents):
-        #     loc_dim = local_dims_act[i]
-        #     # Box para la obs local
-        #     act_box = Box(self.env.action_space.low, self.env.action_space.high, shape=(loc_dim,), dtype=np.float64)
-        #     self.action_space[agent.name] = act_box
+        local_dims = [flat_dim(ag.observation_space) for ag in self.new_agents]
+        state_dim = sum(local_dims)
+        self.observation_space = GymDict({})
+        #for i, agent in enumerate(self.new_agents):
+        for i in enumerate(self.num_agents):
+            loc_dim = local_dims[i]
+            # Box para la obs local
+            obs_box = Box(low=-100.0, high=100.0, shape=(loc_dim,), dtype=np.float64)
+            # Box para el state global (idéntico para todos los agentes)
+            state_box = Box(low=-100.0, high=100.0, shape=(state_dim,), dtype=np.float64)
+            self.observation_space[agents[i]] = GymDict({
+                "obs": obs_box,
+                "state": state_box,
+            })
+        ###### acciones
+        self.action_space = GymDict({})
+        local_dims_act = [flat_dim(ag.action_space) for ag in self.new_agents]
+        for i, agent in enumerate(self.new_agents):
+            loc_dim = local_dims_act[i]
+            # Box para la obs local
+            act_box = Box(self.env.action_space.low, self.env.action_space.high, shape=(loc_dim,), dtype=np.float64)
+            self.action_space[agent.name] = act_box
 
 
         # # Originales
         # self.action_space = Box(self.env.action_space.low, self.env.action_space.high, shape=(1,))
-        self.observation_space = GymDict({
-            "obs": Box(-100.0, 100.0, shape=(self.env.get_obs_size(),), ),
-            "state": Box(-100.0, 100.0, shape=(self.env.get_state_size(),), ),
-        })
+        # self.observation_space = GymDict({
+        #     "obs": Box(-100.0, 100.0, shape=(self.env.get_obs_size(),), ),
+        #     "state": Box(-100.0, 100.0, shape=(self.env.get_state_size(),), ),
+        # })
         ###############
-        self.num_agents = self.env.get_num_of_agents()
         self.agents = ["agent_{}".format(i) for i in range(self.num_agents)]
         env_config["map_name"] = net_topology
         self.env_config = env_config

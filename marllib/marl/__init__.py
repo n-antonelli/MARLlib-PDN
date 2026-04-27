@@ -205,15 +205,39 @@ def build_model(
     else:
         raise NotImplementedError("{} not supported agent model arch".format(model_preference["core_arch"]))
 
-    if len(environment[0].observation_space.spaces["obs"].shape) == 1:
-        encoder = "fc_encoder"
-    else:
-        encoder = "cnn_encoder"
 
-    # encoder config
-    encoder_arch_config = get_model_config(encoder)
-    model_config = recursive_dict_update(model_config, encoder_arch_config)
-    model_config = recursive_dict_update(model_config, {"model_arch_args": model_preference})
+    ##########
+    # # original
+    # if len(environment[0].observation_space.spaces["obs"].shape) == 1:
+    #     encoder = "fc_encoder"
+    # else:
+    #     encoder = "cnn_encoder"
+    #
+    # # encoder config
+    # encoder_arch_config = get_model_config(encoder)
+    # model_config = recursive_dict_update(model_config, encoder_arch_config)
+    # model_config = recursive_dict_update(model_config, {"model_arch_args": model_preference})
+        ###### obs diferentes
+        obs_space_per_agent = environment[
+            0].observation_space.spaces  # dict: agent_id -> Dict(obs=Box(...), state=Box(...))
+
+        # Verificamos si todos los agentes tienen observaciones 1D (tipo MLP)
+        all_flat = all(
+            len(space.spaces["obs"].shape) == 1
+            for space in obs_space_per_agent.values()
+        )
+
+        # Elegimos encoder según eso
+        if all_flat:
+            encoder = "fc_encoder"
+        else:
+            encoder = "cnn_encoder"
+
+        # Cargamos la config del encoder elegido
+        encoder_arch_config = get_model_config(encoder)
+        model_config = recursive_dict_update(model_config, encoder_arch_config)
+        model_config = recursive_dict_update(model_config, {"model_arch_args": model_preference})
+    ##########
 
     if algorithm.algo_type == "VD":
         mixer_arch_config = get_model_config("mixer")

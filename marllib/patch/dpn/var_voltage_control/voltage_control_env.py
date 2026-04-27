@@ -85,8 +85,10 @@ class VoltageControl(MultiAgentEnv):
             self.n_agents = len(set(self.base_powergrid.bus["zone"].to_numpy(copy=True))) - 1  # exclude the main zone
         agents_obs, state = self.reset()
         ###############
-        self.obs_size = agents_obs[0].shape[0]
-        # self.obs_size = [len(agents_obs[i]) for i in range(self.n_agents)]
+        # original
+        # self.obs_size = agents_obs[0].shape[0]
+        # obs con distintos tamaños
+        self.obs_size = [len(agents_obs[i]) for i in range(self.n_agents)]
         # TODO: Utilizar el tamaño del que mayor observación tenga!
         ###############
         self.state_size = state.shape[0]
@@ -272,11 +274,12 @@ class VoltageControl(MultiAgentEnv):
                 obs_zone = obs_zone_dict[zone]
                 pad_obs_zone = np.concatenate( [obs_zone, np.zeros(obs_max_len - obs_zone.shape[0])], axis=0 )
                 agents_obs.append(pad_obs_zone)
+        ###########
+        # observaciones diferentes tamaños
         elif self.args.mode == "decentralised":
-            obs_len_list = list()
             zone_obs_list = list()
             for i in range(self.n_agents):  # Para cada agente
-                zone_buses, pv, q, sgen_buses = clusters[f"zone{i+1}"]
+                zone_buses, pv, q, sgen_buses = clusters[f"zone{i + 1}"]
                 obs = list()
                 if "demand" in self.state_space:
                     copy_zone_buses = copy.deepcopy(zone_buses)
@@ -292,30 +295,79 @@ class VoltageControl(MultiAgentEnv):
                     obs += list(zone_buses.loc[:, "vm_pu"].to_numpy(copy=True))
                 if "va_degree" in self.state_space:
                     obs += list(zone_buses.loc[:, "va_degree"].to_numpy(copy=True) * np.pi / 180)
-                obs = np.array(obs)
-                zone_obs_list.append(obs)
-                obs_len_list.append(obs.shape[0])
-            agents_obs = []
-            obs_max_len = max(obs_len_list)
-            for obs_zone in zone_obs_list:
-                pad_obs_zone = np.concatenate( [obs_zone, np.zeros(obs_max_len - obs_zone.shape[0])], axis=0 )
-                agents_obs.append(pad_obs_zone)
+
+                # Guardamos la observación original SIN padding
+                zone_obs_list.append(np.array(obs))
+
+            # Eliminamos el bloque de 'obs_max_len' y el loop de concatenación de ceros
+            # agents_obs ahora es directamente la lista de observaciones reales
+            agents_obs = zone_obs_list
+
+        # Manejo de la historia (History)
         if self.history > 1:
             agents_obs_ = []
             for i, obs in enumerate(agents_obs):
+                # crea ceros con el tamaño REAL de la observación de este agente específico, no del máximo global.
                 if len(self.obs_history[i]) >= self.history - 1:
-                    obs_ = np.concatenate(self.obs_history[i][-self.history+1:]+[obs], axis=0)
+                    obs_ = np.concatenate(self.obs_history[i][-self.history + 1:] + [obs], axis=0)
                 else:
-                    zeros = [np.zeros_like(obs)] * ( self.history - len(self.obs_history[i]) - 1 )
+                    # Rellenamos con ceros del tamaño local del agente i
+                    zeros = [np.zeros_like(obs)] * (self.history - len(self.obs_history[i]) - 1)
                     obs_ = self.obs_history[i] + [obs]
                     obs_ = zeros + obs_
                     obs_ = np.concatenate(obs_, axis=0)
+
                 agents_obs_.append(copy.deepcopy(obs_))
                 self.obs_history[i].append(copy.deepcopy(obs))
             agents_obs = agents_obs_
 
         return agents_obs
 
+        # original
+        # elif self.args.mode == "decentralised":
+        #     obs_len_list = list()
+        #     zone_obs_list = list()
+        #     for i in range(self.n_agents):  # Para cada agente
+        #         zone_buses, pv, q, sgen_buses = clusters[f"zone{i+1}"]
+        #         obs = list()
+        #         if "demand" in self.state_space:
+        #             copy_zone_buses = copy.deepcopy(zone_buses)
+        #             copy_zone_buses.loc[sgen_buses]["p_mw"] += pv
+        #             copy_zone_buses.loc[sgen_buses]["q_mvar"] += q
+        #             obs += list(copy_zone_buses.loc[:, "p_mw"].to_numpy(copy=True))
+        #             obs += list(copy_zone_buses.loc[:, "q_mvar"].to_numpy(copy=True))
+        #         if "pv" in self.state_space:
+        #             obs += list(pv.to_numpy(copy=True))
+        #         if "reactive" in self.state_space:
+        #             obs += list(q.to_numpy(copy=True))
+        #         if "vm_pu" in self.state_space:
+        #             obs += list(zone_buses.loc[:, "vm_pu"].to_numpy(copy=True))
+        #         if "va_degree" in self.state_space:
+        #             obs += list(zone_buses.loc[:, "va_degree"].to_numpy(copy=True) * np.pi / 180)
+        #         obs = np.array(obs)
+        #         zone_obs_list.append(obs)
+        #         obs_len_list.append(obs.shape[0])
+        #     agents_obs = []
+        #     obs_max_len = max(obs_len_list)
+        #     for obs_zone in zone_obs_list:
+        #         pad_obs_zone = np.concatenate( [obs_zone, np.zeros(obs_max_len - obs_zone.shape[0])], axis=0 )
+        #         agents_obs.append(pad_obs_zone)
+        # if self.history > 1:
+        #     agents_obs_ = []
+        #     for i, obs in enumerate(agents_obs):
+        #         if len(self.obs_history[i]) >= self.history - 1:
+        #             obs_ = np.concatenate(self.obs_history[i][-self.history+1:]+[obs], axis=0)
+        #         else:
+        #             zeros = [np.zeros_like(obs)] * ( self.history - len(self.obs_history[i]) - 1 )
+        #             obs_ = self.obs_history[i] + [obs]
+        #             obs_ = zeros + obs_
+        #             obs_ = np.concatenate(obs_, axis=0)
+        #         agents_obs_.append(copy.deepcopy(obs_))
+        #         self.obs_history[i].append(copy.deepcopy(obs))
+        #     agents_obs = agents_obs_
+        #
+        # return agents_obs
+        ###########
     def get_obs_agent(self, agent_id):
         """return observation for agent_id 
         """
