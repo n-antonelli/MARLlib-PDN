@@ -130,7 +130,7 @@ class RLlibVoltageControl(MultiAgentEnv):
         # Espacio de observación y de acción dferentes
         #### observaciones
         self.new_agents = []
-        # agents =
+        agents = policy_mapping_dict[net_topology]["team_prefix"]
         # self.agents = env_config["agents"]
         # for a in self.agents:
         #     # Top-level name argument overrides a name in the config.  The
@@ -146,7 +146,7 @@ class RLlibVoltageControl(MultiAgentEnv):
         state_dim = sum(local_dims)
         self.observation_space = GymDict({})
         #for i, agent in enumerate(self.new_agents):
-        for i in enumerate(self.num_agents):
+        for i in range(self.num_agents):
             loc_dim = local_dims[i]
             # Box para la obs local
             obs_box = Box(low=-100.0, high=100.0, shape=(loc_dim,), dtype=np.float64)
