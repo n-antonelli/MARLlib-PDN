@@ -84,8 +84,11 @@ class VoltageControl(MultiAgentEnv):
             self.n_actions = len(self.base_powergrid.sgen)
             self.n_agents = len(set(self.base_powergrid.bus["zone"].to_numpy(copy=True))) - 1  # exclude the main zone
         agents_obs, state = self.reset()
-
+        ###############
         self.obs_size = agents_obs[0].shape[0]
+        # self.obs_size = [len(agents_obs[i]) for i in range(self.n_agents)]
+        # TODO: Utilizar el tamaño del que mayor observación tenga!
+        ###############
         self.state_size = state.shape[0]
         self.last_v = self.powergrid.res_bus["vm_pu"].sort_index().to_numpy(copy=True)
         self.last_q = self.powergrid.sgen["q_mvar"].to_numpy(copy=True)
@@ -206,8 +209,8 @@ class VoltageControl(MultiAgentEnv):
             terminated = True
         else:
             terminated = False
-        if terminated:
-            print (f"Episode terminated at time: {self.steps} with return: {self.sum_rewards:2.4f}.")
+        # if terminated:
+        #     print (f"Episode terminated at time: {self.steps} with return: {self.sum_rewards:2.4f}.")
 
         return reward, terminated, info
 
@@ -516,7 +519,7 @@ class VoltageControl(MultiAgentEnv):
         self.factor = 1.2
         self.p_max = self.pv_data.to_numpy(copy=True).max(axis=0)
         self.s_max = self.factor * self.p_max
-        print (f"This is the s_max: \n{self.s_max}")
+        # print (f"This is the s_max: \n{self.s_max}")
 
     def _get_clusters_info(self):
         """return the clusters of info

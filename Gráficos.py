@@ -46,12 +46,12 @@ mode = 'train'
 # MAPPOTrainer_PGW_PGW_c4ea5_00000_0_2025-08-22_19-24-29
 # MAPPOTrainer_PGW_PGW_3e3d0_00000_0_2025-08-23_11-55-43
 # MAPPOTrainer_PGW_PGW_8abea_00000_0_2025-08-23_16-44-11
-train_path = 'MAPPOTrainer_voltage_case33_3min_final_e87ea_00000_0_2026-04-21_12-29-38'
+train_path = 'MAPPOTrainer_voltage_case33_3min_final_ee626_00000_0_2026-04-24_09-41-36'
 # MAPPOTrainer_PGW_PGW_f1252_00000_0_2025-08-22_22-10-22
 # MAPPOTrainer_PGW_PGW_cc92c_00000_0_2025-08-23_12-56-58
 # MAPPOTrainer_PGW_PGW_4029c_00000_0_2025-08-23_18-43-48
 eval_path = 'MAPPOTrainer_PGW_PGW_4029c_00000_0_2025-08-23_18-43-48'
-
+cantidad_agentes = 4
 
 if device == 'oficina':
     url = "C:\\Users\\Usuario\\Documents\\Programas\\MARLlib-PDN"
@@ -99,7 +99,9 @@ if mode == 'train':
             train_data.append(json.loads(episode))
 
     agents = train_data[0]['config']['model']['custom_model_config']['policy_mapping_info']['case33_3min_final']['team_prefix']
-    figl, axl = plt.subplots(1,5, figsize=(12, 6))
+    agents = [f'agent_{i}' for i in range(cantidad_agentes)]
+    pol_agents = {f'agent_{i}': f'policy_{i}' for i in range(cantidad_agentes)}
+    figl, axl = plt.subplots(1,len(agents)+1, figsize=(12, 6))
     loss_episode = []
     loss_episode_ag0 = []
     loss_episode_ag1 = []
@@ -107,7 +109,7 @@ if mode == 'train':
     loss_episode_ag3 = []
     loss_episode_ag4 = []
 
-    figr, axr = plt.subplots(1,6, figsize=(16, 6))
+    figr, axr = plt.subplots(1,len(agents)+1, figsize=(16, 6))
     reward_policy = []
     reward_episode = []
     reward_episode_ag0 = []
@@ -135,12 +137,6 @@ if mode == 'train':
     # pol_building
     # ['learner']['pol_ev']['learner_stats']['total_loss']
     # print((data[1]['info']['learner']['pol_ev']['learner_stats']['total_loss']))
-    agents = ['agent_0', 'agent_1', 'agent_2', 'agent_3', 'agent_4', 'agent_5']
-    pol_agents = {'agent_0': 'policy_0',
-                  'agent_1': 'policy_1',
-                  'agent_2': 'policy_2',
-                  'agent_3': 'policy_3',
-                  'agent_4': 'policy_4',}
     # print(data[episode]['info']['learner'])
     #Sacar tipos de agentes (nombres)
     for episode in range(1, len(train_data)): #len(data)): # TODO: Está hecho para 3 agentes
@@ -148,7 +144,7 @@ if mode == 'train':
         loss_episode_ag1.append(train_data[episode]['info']['learner'][pol_agents[agents[1]]]['learner_stats']['total_loss'])
         loss_episode_ag2.append(train_data[episode]['info']['learner'][pol_agents[agents[2]]]['learner_stats']['total_loss'])
         loss_episode_ag3.append(train_data[episode]['info']['learner'][pol_agents[agents[3]]]['learner_stats']['total_loss'])
-        loss_episode_ag4.append(train_data[episode]['info']['learner'][pol_agents[agents[4]]]['learner_stats']['total_loss'])
+        # loss_episode_ag4.append(train_data[episode]['info']['learner'][pol_agents[agents[4]]]['learner_stats']['total_loss'])
         #loss_episode.append(sum(loss_episode_ag2[episode],loss_episode_ag1[episode], loss_episode_ag0[episode]))
 
         # if 'shared_policy' in train_data[episode]['policy_reward_max']:
@@ -160,7 +156,7 @@ if mode == 'train':
         reward_episode_ag1.append(train_data[episode]['policy_reward_mean'][pol_agents[agents[1]]])
         reward_episode_ag2.append(train_data[episode]['policy_reward_mean'][pol_agents[agents[2]]])
         reward_episode_ag3.append(train_data[episode]['policy_reward_mean'][pol_agents[agents[3]]])
-        reward_episode_ag4.append(train_data[episode]['policy_reward_mean'][pol_agents[agents[4]]])
+        # reward_episode_ag4.append(train_data[episode]['policy_reward_mean'][pol_agents[agents[4]]])
         reward_episode.append(train_data[episode]['episode_reward_mean'])
         # reward_episode_ag1.append(train_data[episode]['policy_reward_mean'][pol_agents[agents[1]]])
         # reward_episode_ag2.append(train_data[episode]['policy_reward_mean'][pol_agents[agents[2]]])
@@ -177,23 +173,26 @@ if mode == 'train':
         # p_consumed_building_pv.append(train_data[episode]["custom_metrics"]["p_consumed_building_pv_mean"])
         # p_consumed_building_storage.append(train_data[episode]["custom_metrics"]["p_consumed_building_storage_mean"])
 
-    loss_episode = {agents[0]: loss_episode_ag0,
+    loss_episode_ag = {agents[0]: loss_episode_ag0,
                     agents[1]: loss_episode_ag1,
                     agents[2]: loss_episode_ag2,
                     agents[3]: loss_episode_ag3,
-                    agents[4]: loss_episode_ag4,
+                    # agents[4]: loss_episode_ag4,
                     }
 
     # axl.plot(range(0, len(loss_episode)), np.asarray(loss_episode), label=f'loss')
-    for i in range(len(agents)-1):
-        axl[i].set_title(f'{algoritmo} loss - {agents[i]}')
-        axl[i].plot(range(0, len(loss_episode[agents[i]])), np.asarray(loss_episode[agents[i]]), label=f'loss_{agents[i]}')
+    for i in range(len(agents) + 1):
+        if i == len(agents):
+            axr[i].plot(range(0, len(loss_episode)), np.asarray(loss_episode), label='total_rew')
+        else:
+            axl[i].set_title(f'{algoritmo} loss - {agents[i]}')
+            axl[i].plot(range(0, len(loss_episode_ag[agents[i]])), np.asarray(loss_episode_ag[agents[i]]), label=f'loss_{agents[i]}')
 
     reward_episode_ag = {agents[0]: reward_episode_ag0,
                          agents[1]: reward_episode_ag1,
                          agents[2]: reward_episode_ag2,
                          agents[3]: reward_episode_ag3,
-                         agents[4]: reward_episode_ag4,
+                         # agents[4]: reward_episode_ag4,
                          }
     # axl.legend(loc='best')
     # axl.set_xlim(50, )
@@ -201,8 +200,8 @@ if mode == 'train':
     #figl.savefig(f'Loss_{actual_date}_{algo}.png', dpi=600)
     figl.show()
     # axr.plot(range(0, len(reward_episode)), np.asarray(reward_episode), label=f'rew')
-    for i in range(len(agents)):
-        if i == len(agents)-1:
+    for i in range(len(agents)+1):
+        if i == len(agents):
             axr[i].plot(range(0, len(reward_episode)), np.asarray(reward_episode), label='total_rew')
         else:
             axr[i].set_title(f'{algoritmo} reward- {agents[i]}')
