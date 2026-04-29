@@ -53,9 +53,38 @@ class BaseEncoder(nn.Module):
                 for i in range(self.custom_config["model_arch_args"]["fc_layer"]):
                     out_dim = self.custom_config["model_arch_args"]["out_dim_fc_{}".format(i)]
                     encoder_layer_dim.append(out_dim)
-
+            ##########
+            # original
+            # self.encoder_layer_dim = encoder_layer_dim
+            # input_dim = obs_space['obs'].shape[0]
+            # for out_dim in self.encoder_layer_dim:
+            #     layers.append(
+            #         SlimFC(in_size=input_dim,
+            #                out_size=out_dim,
+            #                initializer=normc_initializer(1.0),
+            #                activation_fn=self.activation))
+            #     input_dim = out_dim
+            # Fragmento modificado de BaseEncoder
             self.encoder_layer_dim = encoder_layer_dim
-            input_dim = obs_space['obs'].shape[0]
+            input_dim = 0  # Inicializamos a 0 para que sea más flexible
+
+            # Verificamos si la clave 'obs' existe en el espacio de observación.
+            # Si existe, usamos la dimensión de la observación local.
+            if "obs" in obs_space.spaces:
+                input_dim = obs_space['obs'].shape[0]
+            elif len(obs_space.spaces) == 1:
+                # Esto maneja el caso donde el espacio de observación no tiene sub-claves
+                # (por ejemplo, es solo un array plano).
+                input_dim = obs_space.shape[0]
+            else:
+                # Si no tiene 'obs', intentamos encontrar la clave de la observación local.
+                # Si tu entorno usa un nombre diferente, debes modificar esto.
+                # Por ejemplo, si se llama 'local_obs', usa 'local_obs' en lugar de 'obs'.
+                print("Warning: 'obs' key not found. Using the first available observation space.")
+                first_obs_key = list(obs_space.spaces.keys())[0]
+                input_dim = obs_space[first_obs_key].spaces['obs'].shape[0]
+
+            # El resto del código permanece igual, usando la dimensión de entrada calculada.
             for out_dim in self.encoder_layer_dim:
                 layers.append(
                     SlimFC(in_size=input_dim,
@@ -63,6 +92,7 @@ class BaseEncoder(nn.Module):
                            initializer=normc_initializer(1.0),
                            activation_fn=self.activation))
                 input_dim = out_dim
+
         elif "conv_layer" in self.custom_config["model_arch_args"]:
             input_dim = obs_space['obs'].shape[2]
             for i in range(self.custom_config["model_arch_args"]["conv_layer"]):

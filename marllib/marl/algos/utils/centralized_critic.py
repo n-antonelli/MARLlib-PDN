@@ -51,29 +51,51 @@ def centralized_critic_postprocessing(policy,
                                       episode=None):
     custom_config = policy.config["model"]["custom_model_config"]
     pytorch = custom_config["framework"] == "torch"
-    obs_dim = get_dim(custom_config["space_obs"]["obs"].shape)
+    #########
+    # original
+    # obs_dim = get_dim(custom_config["space_obs"]["obs"].shape)
+    # observaciones diferentes
+    obs_dim = sum(
+        custom_config["space_obs_per_agent"][agent].shape[0]
+        for agent in custom_config["space_obs"].spaces.keys()
+    )
+    #########
     algorithm = custom_config["algorithm"]
     opp_action_in_cc = custom_config["opp_action_in_cc"]
     global_state_flag = custom_config["global_state_flag"]
     mask_flag = custom_config["mask_flag"]
 
     if mask_flag:
-        action_mask_dim = custom_config["space_act"].n
+        action_mask_dim = custom_config["space_act"].n  # permite incluir acciones en el state?
     else:
         action_mask_dim = 0
 
     n_agents = custom_config["num_agents"]
     opponent_agents_num = n_agents - 1
+    name_agent_0 = custom_config['agent_name_ls'][0]
+    total_state_dim = custom_config["space_obs"].spaces[name_agent_0].spaces['state'].shape[0]
 
     if (pytorch and hasattr(policy, "compute_central_vf")) or \
             (not pytorch and policy.loss_initialized()):
+        ############
+        # original
+        # if not opp_action_in_cc and global_state_flag:
+        #     sample_batch["state"] = sample_batch['obs'][:, action_mask_dim:]
+        #     sample_batch[SampleBatch.VF_PREDS] = policy.compute_central_vf(
+        #         convert_to_torch_tensor(
+        #             sample_batch["state"], policy.device),
+        #     ).cpu().detach().numpy()
 
+        # observaciones diferentes
         if not opp_action_in_cc and global_state_flag:
-            sample_batch["state"] = sample_batch['obs'][:, action_mask_dim:]
-            sample_batch[SampleBatch.VF_PREDS] = policy.compute_central_vf(
-                convert_to_torch_tensor(
-                    sample_batch["state"], policy.device),
-            ).cpu().detach().numpy()
+            global_state_start = action_mask_dim
+            global_state_end = action_mask_dim + total_state_dim
+            obs_start = 0
+            obs_end = action_mask_dim
+            state_portion = sample_batch['obs'][:, global_state_start:global_state_end]  # 25 dims
+            obs_portion = sample_batch['obs'][:, obs_start:obs_end]  # 17 dims
+            sample_batch["state"] = state_portion
+        ############
         else:  # need opponent info
             assert other_agent_batches is not None
             opponent_batch_list = list(other_agent_batches.values())
@@ -127,9 +149,19 @@ def centralized_critic_postprocessing(policy,
         # Policy hasn't been initialized yet, use zeros.
         o = sample_batch[SampleBatch.CUR_OBS]
         if global_state_flag:
-            sample_batch["state"] = np.zeros((o.shape[0], get_dim(custom_config["space_obs"]["state"].shape) + get_dim(
-                custom_config["space_obs"]["obs"].shape)),
+            ############
+            # original
+            # sample_batch["state"] = np.zeros((o.shape[0], get_dim(custom_config["space_obs"]["state"].shape) + get_dim(
+            #     custom_config["space_obs"]["obs"].shape)),
+            #                                  dtype=sample_batch[SampleBatch.CUR_OBS].dtype)
+            # observaciones diferentes
+            # name_agent_0 = custom_config['agent_name_ls'][0]
+            sample_batch["state"] = np.zeros((o.shape[0], get_dim(custom_config["space_obs"].spaces[name_agent_0]["state"].shape)
+                                              # sample_batch["state"] = np.zeros((o.shape[0], get_dim(custom_config["space_obs"]["state"].shape)  # sample_batch["state"] = np.zeros((o.shape[0], get_dim(custom_config["space_obs"]["state"].shape)
+                                              # + get_dim(custom_config["space_obs"]["obs"].shape) # como el 'state' ya tiene incluidas todas las observaciones no hace falta 'obs'
+                                              ),
                                              dtype=sample_batch[SampleBatch.CUR_OBS].dtype)
+            ############
         else:
             sample_batch["state"] = np.zeros((o.shape[0], n_agents, obs_dim),
                                              dtype=sample_batch[SampleBatch.CUR_OBS].dtype)

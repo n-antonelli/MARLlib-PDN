@@ -131,17 +131,51 @@ def run_cc(exp_info, env, model, stop=None):
                 lambda agent_id: "policy_{}_".format(agent_id.split("_")[0]))
 
     elif exp_info["share_policy"] == "individual":
-        if not policy_mapping_info["one_agent_one_policy"]:
-            raise ValueError("in {}, agent number too large, we disable no sharing function".format(map_name))
-
-        policies = {
-            "policy_{}".format(i): (None, env_info["space_obs"], env_info["space_act"], {}) for i in
-            range(env_info["num_agents"])
+        ###########
+        # original
+        # if not policy_mapping_info["one_agent_one_policy"]:
+        #     raise ValueError("in {}, agent number too large, we disable no sharing function".format(map_name))
+        #
+        # policies = {
+        #     "policy_{}".format(i): (None, env_info["space_obs"], env_info["space_act"], {}) for i in
+        #     range(env_info["num_agents"])
+        # }
+        # policy_ids = list(policies.keys())
+        # policy_mapping_fn = tune.function(
+        #     lambda agent_id: policy_ids[agent_name_ls.index(agent_id)])
+        encoder_layer = {
+            "agent_zone_1": "52-52",
+            "agent_zone_2": "18-18",
+            "agent_zone_3": "14-14",
+            "agent_zone_4": "36-36",
+            # "agent_pv_1": "1-1",
+            # "agent_pv_2": "1-1",
         }
+        policies = {}
+        name = env_info['agent_name_ls'][0]
+        space_size = env_info["space_obs"].spaces[name]['state'].shape[0]
+        for agent in env_info["space_obs"].spaces:
+            policies[f"pol_{agent}"] = (None, env_info["space_obs"].spaces[agent], env_info["space_act"].spaces[agent],
+                                        {"model": {"custom_model": "Centralized_Critic_Model",
+                                                   "custom_model_config": {"encode_layer": encoder_layer[agent], "num_agents": 4, "opp_action_in_cc": False,
+                                                                           "global_state_flag": True,
+                                                                           "global_state_dim": space_size,
+                                                                           }}})
         policy_ids = list(policies.keys())
-        policy_mapping_fn = tune.function(
-            lambda agent_id: policy_ids[agent_name_ls.index(agent_id)])
-
+        def policy_mapping_fn(agent_id, episode, worker, **kwargs):  # def policy_mapping_fn(agent_id, **kwargs):
+            if agent_id == "agent_zone_1":
+                return "pol_agent_zone_1"
+            elif agent_id == "agent_zone_2":
+                return "pol_agent_zone_2"
+            elif agent_id == "agent_zone_3":
+                return "pol_agent_zone_3"
+            elif agent_id == "agent_zone_4":
+                return "pol_agent_zone_4"
+            elif agent_id == "agent_pv_1":
+                return "pol_agent_pv_1"
+            else:
+                print(f"no existe el agente {agent_id}")
+        ###########
     else:
         raise ValueError("wrong share_policy {}".format(exp_info["share_policy"]))
 
@@ -170,7 +204,8 @@ def run_cc(exp_info, env, model, stop=None):
         "num_workers": exp_info["num_workers"],
         "multiagent": {
             "policies": policies,
-            "policy_mapping_fn": policy_mapping_fn
+            "policy_mapping_fn": policy_mapping_fn,
+            "policies_to_train": policy_ids,
         },
         "framework": exp_info["framework"],
         "evaluation_interval": exp_info["evaluation_interval"],

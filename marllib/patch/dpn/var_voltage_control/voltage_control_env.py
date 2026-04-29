@@ -87,9 +87,9 @@ class VoltageControl(MultiAgentEnv):
         ###############
         # original
         # self.obs_size = agents_obs[0].shape[0]
+        # Modificar: utilizar el tamaño del que mayor observación tenga!
         # obs con distintos tamaños
         self.obs_size = [len(agents_obs[i]) for i in range(self.n_agents)]
-        # TODO: Utilizar el tamaño del que mayor observación tenga!
         ###############
         self.state_size = state.shape[0]
         self.last_v = self.powergrid.res_bus["vm_pu"].sort_index().to_numpy(copy=True)

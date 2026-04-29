@@ -42,6 +42,14 @@ env_args:
     "mode": distributed
     "reset_action": True
     "seed": 0
+    "local_mode": True
+    "num_gpus": 0
+    "rollout_fragment_length": 960
+    "num_workers": 1
+    "num_envs_per_worker": 1
+    "share_policy": 'individual'
+    "checkpoint_freq": 100
+    "num_to_keep": 2
 
 mask_flag: False
 global_state_flag: True

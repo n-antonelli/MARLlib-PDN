@@ -56,8 +56,14 @@ class CentralizedEncoder(nn.Module):
                     encoder_layer_dim.append(out_dim)
 
             self.encoder_layer_dim = encoder_layer_dim
-            if "state" not in obs_space.spaces:
-                input_dim = self.num_agents * obs_space['obs'].shape[0]
+            #############
+            # original
+            # if "state" not in obs_space.spaces:
+                # input_dim = self.num_agents * obs_space['obs'].shape[0]
+            if "state" in obs_space.spaces:
+                # modificación
+                input_dim = obs_space['state'].shape[0]
+            ###########
             else:
                 input_dim = obs_space['state'].shape[0] + obs_space['obs'].shape[0]
             for out_dim in self.encoder_layer_dim:
@@ -95,11 +101,30 @@ class CentralizedEncoder(nn.Module):
 
         else:
             raise ValueError("fc_layer/conv layer not in model arch args")
+        #############
+        # original
+        # if "state" not in obs_space.spaces and "conv_layer" in self.custom_config["model_arch_args"]:
+        #     self.output_dim = input_dim * self.num_agents  # record
+        # else:
+        #     self.output_dim = input_dim  # record
+        if "state" in obs_space.spaces:
+            # Asumimos que `input_dim` ya ha sido establecido correctamente
+            # (es la dimensión de la última capa del encoder).
+            self.output_dim = input_dim  # El output del encoder es simplemente su última dimensión
+            # print(f"✅ CentralizedEncoder Output: Usando 'state'. Output_dim: {self.output_dim}")
+        elif "conv_layer" in self.custom_config["model_arch_args"]:
+            # Esta rama se ejecutará si no hay 'state' en obs_space.spaces
+            # Y si estás usando capas convolucionales.
+            # La lógica original asumía concatenación de observaciones de agentes.
+            self.output_dim = input_dim * self.num_agents  # Esta es la lógica original para conv
+            # print(f"⚠️ CentralizedEncoder Output: Conv sin 'state'. Output_dim: {self.output_dim}")
+        else:  # Esto cubre el caso de fc_layer sin 'state' en obs_space.spaces
+            # Esta es la lógica original para FC sin 'state'
+            # (que en tu caso no debería ejecutarse si tienes 'state')
+            self.output_dim = input_dim  # El output del encoder es simplemente su última dimensión
+            # print(f"⚠️ CentralizedEncoder Output: FC sin 'state'. Output_dim: {self.output_dim}")
 
-        if "state" not in obs_space.spaces and "conv_layer" in self.custom_config["model_arch_args"]:
-            self.output_dim = input_dim * self.num_agents  # record
-        else:
-            self.output_dim = input_dim  # record
+        #############
         self.encoder = nn.Sequential(*layers)
 
     def forward(self, inputs) -> (TensorType, List[TensorType]):

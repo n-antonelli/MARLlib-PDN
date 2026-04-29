@@ -29,9 +29,9 @@ import gymnasium
 
 mode = 'decentralised'  # distributed
 if mode == 'decentralised':
-    team_prefix = ('zone0', 'zone1', 'zone2', 'zone3')
+    team_prefix = ('agent_zone_1', 'agent_zone_2', 'agent_zone_3', 'agent_zone_4')
 else:
-    team_prefix = ('pv0', 'pv1', 'pv2', 'pv3', 'pv4', 'pv5')
+    team_prefix = ('agent_pv_1', 'agent_pv_2', 'agent_pv_3', 'agent_pv_4', 'agent_pv_5', 'agent_pv_6')
 
 policy_mapping_dict = {
     # "all_scenario": {
@@ -142,8 +142,10 @@ class RLlibVoltageControl(MultiAgentEnv):
         #     # Call the constructor and append to the agent list.
         #     new_agent = a["cls"](name=a["name"], **_config, **env_config["common_config"])
         #     self.new_agents.append(new_agent)
-        local_dims = [flat_dim(ag.observation_space) for ag in self.new_agents]
-        state_dim = sum(local_dims)
+        agentes_externos = 6
+        observaciones_agentes = 4
+        local_dims = self.env.obs_size
+        state_dim = sum(local_dims) + (agentes_externos * observaciones_agentes)
         self.observation_space = GymDict({})
         #for i, agent in enumerate(self.new_agents):
         for i in range(self.num_agents):
@@ -158,12 +160,34 @@ class RLlibVoltageControl(MultiAgentEnv):
             })
         ###### acciones
         self.action_space = GymDict({})
-        local_dims_act = [flat_dim(ag.action_space) for ag in self.new_agents]
-        for i, agent in enumerate(self.new_agents):
-            loc_dim = local_dims_act[i]
-            # Box para la obs local
-            act_box = Box(self.env.action_space.low, self.env.action_space.high, shape=(loc_dim,), dtype=np.float64)
-            self.action_space[agent.name] = act_box
+        self.agent_pv_map = {}
+        zone_ids = [z for z in self.env.base_powergrid.bus.zone.unique() if z != 0 and z != 'main']
+        zone_ids = sorted(zone_ids)
+
+        for i, zone in enumerate(zone_ids):
+            agent_id = f"agent_zone_{i+1}"
+
+            # 3. Buscamos qué buses pertenecen a esta zona
+            buses_in_zone = self.env.base_powergrid.bus[self.env.base_powergrid.bus.zone == zone].index
+
+            # 4. Filtramos los sgen (PVs) que están conectados a esos buses
+            pvs_indices = self.env.base_powergrid.sgen[self.env.base_powergrid.sgen.bus.isin(buses_in_zone)].index.tolist()
+
+            # 5. Guardamos el mapeo para usarlo luego en el método step()
+            self.agent_pv_map[agent_id] = pvs_indices
+
+            # 6. CREACIÓN DEL ESPACIO INDIVIDUAL
+            # Calculamos cuántos PVs tiene esta zona específica
+            num_pvs_in_zone = len(pvs_indices)
+
+            # Creamos un Box cuyo shape es exactamente el número de PVs de esta zona
+            # Usamos .low[0] y .high[0] asumiendo que los límites son uniformes
+            self.action_space[agent_id] = Box(
+                low=self.env.action_space.low,
+                high=self.env.action_space.high,
+                shape=(num_pvs_in_zone,),
+                dtype=np.float32
+            )
 
 
         # # Originales
@@ -173,7 +197,7 @@ class RLlibVoltageControl(MultiAgentEnv):
         #     "state": Box(-100.0, 100.0, shape=(self.env.get_state_size(),), ),
         # })
         ###############
-        self.agents = ["agent_{}".format(i) for i in range(self.num_agents)]
+        self.agents = ["agent_zone_{}".format(i+1) for i in range(self.num_agents)]
         env_config["map_name"] = net_topology
         self.env_config = env_config
 
@@ -229,10 +253,10 @@ class RLlibVoltageControl(MultiAgentEnv):
             "num_agents": self.num_agents,
             "episode_limit": self.env_config["episode_limit"],
             "policy_mapping_info": policy_mapping_dict,
-            # "space_obs_per_agent": {  # solo 'obs' para el crítico centralizado
-            #     agent_id: self.observation_space.spaces[agent_id].spaces["obs"]
-            #     for agent_id in self.agent_names
-            # },
-            # "agent_name_ls": self.agent_names,
+            "space_obs_per_agent": {  # solo 'obs' para el crítico centralizado
+                agent_id: self.observation_space.spaces[agent_id].spaces["obs"]
+                for agent_id in self.agents
+            },
+            "agent_name_ls": self.agents,
         }
         return env_info

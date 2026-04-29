@@ -145,5 +145,4 @@ if __name__ == '__main__':
     model = marl.build_model(env, algo, {"core_arch": "mlp"}) #, "encode_layer": "128-128"})
     print(env)
     # start learning
-    algo.fit(env, model, stop={'episode_reward_mean': -1, 'timesteps_total': 10000000}, local_mode=True, num_gpus=0,  # 'episode_reward_mean': 2000
-             rollout_fragment_length=960, num_workers=1, num_envs_per_worker=1, share_policy='individual', checkpoint_freq=100, num_to_keep=2)  # num_workers=2
+    algo.fit(env, model, stop={'episode_reward_mean': -1, 'timesteps_total': 10000000}, share_policy='individual', checkpoint_freq=100, num_to_keep=2)  # num_workers=2
