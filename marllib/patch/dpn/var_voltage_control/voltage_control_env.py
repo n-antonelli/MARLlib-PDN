@@ -181,7 +181,7 @@ class VoltageControl(MultiAgentEnv):
 
         return self.get_obs(), self.get_state()
 
-    def step(self, actions, add_noise=True):
+    def step(self, actions, add_noise=False):  # True
         """function for the interaction between agent and the env each time step
         """
         last_powergrid = copy.deepcopy(self.powergrid)

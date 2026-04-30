@@ -41,5 +41,5 @@ mappo.render(env, model,
                            'model_path': "checkpoint/checkpoint-6250", # checkpoint path
                            'render': True},  # render
              local_mode=True,
-             share_policy="all",
+             share_policy="individual",
              checkpoint_end=False)

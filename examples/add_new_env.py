@@ -40,6 +40,9 @@ from marllib import marl
 from marllib.envs.base_env import ENV_REGISTRY
 import time
 
+mode = 'train'  # 'eval'
+
+
 # register all scenario with env class
 REGISTRY = {}
 REGISTRY["Checkers"] = Checkers
@@ -144,5 +147,16 @@ if __name__ == '__main__':
     # customize model
     model = marl.build_model(env, algo, {"core_arch": "mlp"}) #, "encode_layer": "128-128"})
     print(env)
-    # start learning
-    algo.fit(env, model, stop={'episode_reward_mean': -1, 'timesteps_total': 10000000}, share_policy='individual', checkpoint_freq=100, num_to_keep=2)  # num_workers=2
+    if mode == 'train':
+        # start learning
+        algo.fit(env, model, stop={'episode_reward_mean': -1, 'timesteps_total': 10000000}, share_policy='individual', checkpoint_freq=100, num_to_keep=2)  # num_workers=2
+
+    elif mode == 'eval':
+        # rendering
+        algo.render(env, model,
+                     restore_path={'params_path': "checkpoint/params.json",  # experiment configuration
+                                   'model_path': "checkpoint/checkpoint-6250", # checkpoint path
+                                   'render': True},  # render
+                     local_mode=True,
+                     share_policy="individual",
+                     checkpoint_end=False)

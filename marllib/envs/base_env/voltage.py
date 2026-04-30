@@ -258,5 +258,6 @@ class RLlibVoltageControl(MultiAgentEnv):
                 for agent_id in self.agents
             },
             "agent_name_ls": self.agents,
+            # "seed": 111
         }
         return env_info

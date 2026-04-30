@@ -46,7 +46,7 @@ mode = 'train'
 # MAPPOTrainer_PGW_PGW_c4ea5_00000_0_2025-08-22_19-24-29
 # MAPPOTrainer_PGW_PGW_3e3d0_00000_0_2025-08-23_11-55-43
 # MAPPOTrainer_PGW_PGW_8abea_00000_0_2025-08-23_16-44-11
-train_path = 'MAPPOTrainer_voltage_case33_3min_final_e0484_00000_0_2026-04-27_12-22-17'
+train_path = 'MAPPOTrainer_voltage_case33_3min_final_452ba_00000_0_2026-04-29_20-29-30'
 # MAPPOTrainer_PGW_PGW_f1252_00000_0_2025-08-22_22-10-22
 # MAPPOTrainer_PGW_PGW_cc92c_00000_0_2025-08-23_12-56-58
 # MAPPOTrainer_PGW_PGW_4029c_00000_0_2025-08-23_18-43-48
@@ -99,8 +99,8 @@ if mode == 'train':
             train_data.append(json.loads(episode))
 
     agents = train_data[0]['config']['model']['custom_model_config']['policy_mapping_info']['case33_3min_final']['team_prefix']
-    agents = [f'agent_{i}' for i in range(cantidad_agentes)]
-    pol_agents = {f'agent_{i}': f'policy_{i}' for i in range(cantidad_agentes)}
+    agents = [f'agent_zone_{i+1}' for i in range(cantidad_agentes)]
+    pol_agents = {f'agent_zone_{i+1}': f'pol_agent_zone_{i+1}' for i in range(cantidad_agentes)}
     figl, axl = plt.subplots(1,len(agents)+1, figsize=(12, 6))
     loss_episode = []
     loss_episode_ag0 = []

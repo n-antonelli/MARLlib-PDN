@@ -41,7 +41,7 @@ env_args:
     "action_bias": null
     "mode": distributed
     "reset_action": True
-    "seed": 0
+    "seed": 111
     "local_mode": True
     "num_gpus": 0
     "rollout_fragment_length": 960
@@ -50,6 +50,7 @@ env_args:
     "share_policy": 'individual'
     "checkpoint_freq": 100
     "num_to_keep": 2
+
 
 mask_flag: False
 global_state_flag: True
