@@ -181,7 +181,7 @@ class VoltageControl(MultiAgentEnv):
 
         return self.get_obs(), self.get_state()
 
-    def step(self, actions, add_noise=False):  # True
+    def step(self, actions, add_noise=False):  # TODO: original = True
         """function for the interaction between agent and the env each time step
         """
         last_powergrid = copy.deepcopy(self.powergrid)
@@ -672,6 +672,7 @@ class VoltageControl(MultiAgentEnv):
         else:
             raise NotImplementedError("Please at least give one weight, either q_weight or line_weight.")
         reward = -loss
+        # print(self.steps, ' ---- v_loss: ', v_loss,' - ', 'q_loss: ', q_loss)
 
         # record destroy
         info["destroy"] = 0.0

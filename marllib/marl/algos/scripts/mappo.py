@@ -84,6 +84,7 @@ def run_mappo(model: Any, exp: Dict, run: Dict, env: Dict,
     back_up_config.pop("algo_args")  # clean for grid_search
 
     config = {
+        "observation_filter": "MeanStdFilter",
         "batch_mode": batch_mode,
         "train_batch_size": train_batch_size,
         "sgd_minibatch_size": sgd_minibatch_size,

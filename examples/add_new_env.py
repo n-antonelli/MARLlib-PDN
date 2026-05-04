@@ -143,7 +143,7 @@ if __name__ == '__main__':
                 "vdppo": marl.algos.vdppo
                 }
     # pick algorithms
-    algo = eleccion[algoritmo](hyperparam_source="test")
+    algo = eleccion[algoritmo](hyperparam_source="common")
     # customize model
     model = marl.build_model(env, algo, {"core_arch": "mlp"}) #, "encode_layer": "128-128"})
     print(env)

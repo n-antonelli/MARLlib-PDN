@@ -51,7 +51,6 @@ env_args:
     "checkpoint_freq": 100
     "num_to_keep": 2
 
-
 mask_flag: False
 global_state_flag: True
 opp_action_in_cc: True

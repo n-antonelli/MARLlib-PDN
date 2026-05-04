@@ -426,19 +426,15 @@ Works that are based on or closely collaborate with MARLlib <[link](https://gith
 distributed: each zone is equipped with several PV generators and each PV generator is an agent
 decentralised: each zone is controlled by an agent and each agent may have variant number of actions
 
-action_dict tiene solo 4 acciones, pero hay agentes que deberían tener 2 acciones
-    def step(self, action_dict):
-        action = [value[0] for value in action_dict.values()]
-        r, d, info = self.env.step(action)
-        o = self.env.get_obs()
-        s = self.env.get_state()
-        rewards = {}
-        obs = {}
-        for index, agent in enumerate(self.agents):
-            obs[agent] = {
-                "obs": np.float32(o[index]),
-                "state": np.float32(s),
-            }
-            rewards[agent] = r
-        dones = {"__all__": d}
-        return obs, rewards, dones, {}
+26.5.04
+distributed: Corre pero los agentes tienen iguales rewards
+Plan de acción: 
+* Ajuste gamma a 0.99 o 0.995 -  porque con 480 pasos por episodios, puede perderse lo que sucede al final
+* De \lambda = 1.0 a 0.95 o 0.98 para estabilizar el loss 
+* De vf_loss_coeff = 1 a vf_loss_coeff = 0.5 para centrarse un poco más en la política y no tanto en el crítico
+* De clip_param = 0.3 a clip_param = 0.1 o 0.2 para que la política no cambie más de 20% en una atualización
+* Normalización de Observaciones y Recompensas - "config": {"observation_filter": "MeanStdFilter",....}
+* Individualizar Rewards
+* LR y Shedule - Pasar de 5e-4, prueba con 1e-4 o incluso 5e-5 para que el loss sea más suave
+* Reward Shaping - Revisa los coeficientes
+* Configuración del Buffer y Batch Size - Aumentar el train_batch_size

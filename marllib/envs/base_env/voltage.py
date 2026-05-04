@@ -142,6 +142,7 @@ class RLlibVoltageControl(MultiAgentEnv):
         #     # Call the constructor and append to the agent list.
         #     new_agent = a["cls"](name=a["name"], **_config, **env_config["common_config"])
         #     self.new_agents.append(new_agent)
+        obs_size = 20.0
         agentes_externos = 6
         observaciones_agentes = 4
         local_dims = self.env.obs_size
@@ -151,9 +152,9 @@ class RLlibVoltageControl(MultiAgentEnv):
         for i in range(self.num_agents):
             loc_dim = local_dims[i]
             # Box para la obs local
-            obs_box = Box(low=-100.0, high=100.0, shape=(loc_dim,), dtype=np.float64)
+            obs_box = Box(low=-obs_size, high=obs_size, shape=(loc_dim,), dtype=np.float64)
             # Box para el state global (idéntico para todos los agentes)
-            state_box = Box(low=-100.0, high=100.0, shape=(state_dim,), dtype=np.float64)
+            state_box = Box(low=-obs_size, high=obs_size, shape=(state_dim,), dtype=np.float64)
             self.observation_space[agents[i]] = GymDict({
                 "obs": obs_box,
                 "state": state_box,
@@ -225,7 +226,7 @@ class RLlibVoltageControl(MultiAgentEnv):
                 # Solo tomamos las acciones necesarias, las demás se ignoran
                 global_action[pv_index] = actions[i]
 
-        # Enviamos el vector completo al entorno de PowerGridworld
+        # Enviamos el vector completo al entorno de PDN
         r, d, info = self.env.step(global_action)
         # action = [value[0] for value in action_dict.values()]
         # r, d, info = self.env.step(action)
