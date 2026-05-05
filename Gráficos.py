@@ -43,13 +43,9 @@ dirección = {
 
 device = 'oficina'
 mode = 'train'
-# MAPPOTrainer_PGW_PGW_c4ea5_00000_0_2025-08-22_19-24-29
-# MAPPOTrainer_PGW_PGW_3e3d0_00000_0_2025-08-23_11-55-43
-# MAPPOTrainer_PGW_PGW_8abea_00000_0_2025-08-23_16-44-11
-train_path = 'MAPPOTrainer_voltage_case33_3min_final_23a82_00000_0_2026-05-04_10-07-01'
-# MAPPOTrainer_PGW_PGW_f1252_00000_0_2025-08-22_22-10-22
-# MAPPOTrainer_PGW_PGW_cc92c_00000_0_2025-08-23_12-56-58
-# MAPPOTrainer_PGW_PGW_4029c_00000_0_2025-08-23_18-43-48
+
+train_path = 'MAPPOTrainer_voltage_case33_3min_final_f8af1_00000_0_2026-05-04_18-26-54'
+
 eval_path = 'MAPPOTrainer_PGW_PGW_4029c_00000_0_2025-08-23_18-43-48'
 cantidad_agentes = 4
 

@@ -142,7 +142,7 @@ class RLlibVoltageControl(MultiAgentEnv):
         #     # Call the constructor and append to the agent list.
         #     new_agent = a["cls"](name=a["name"], **_config, **env_config["common_config"])
         #     self.new_agents.append(new_agent)
-        obs_size = 20.0
+        obs_size = 50.0
         agentes_externos = 6
         observaciones_agentes = 4
         local_dims = self.env.obs_size
