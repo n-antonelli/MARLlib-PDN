@@ -44,7 +44,7 @@ env_args:
     "seed": 111
     "local_mode": True
     "num_gpus": 0
-    "rollout_fragment_length": 960
+    "rollout_fragment_length": 80
     "num_workers": 1
     "num_envs_per_worker": 1
     "share_policy": 'individual'

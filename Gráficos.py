@@ -44,7 +44,7 @@ dirección = {
 device = 'oficina'
 mode = 'train'
 
-train_path = 'MAPPOTrainer_voltage_case33_3min_final_f8af1_00000_0_2026-05-04_18-26-54'
+train_path = 'MAPPOTrainer_voltage_case33_3min_final_aa43e_00000_0_2026-05-05_11-42-39'
 
 eval_path = 'MAPPOTrainer_PGW_PGW_4029c_00000_0_2025-08-23_18-43-48'
 cantidad_agentes = 4

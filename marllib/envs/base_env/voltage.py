@@ -227,7 +227,7 @@ class RLlibVoltageControl(MultiAgentEnv):
                 global_action[pv_index] = actions[i]
 
         # Enviamos el vector completo al entorno de PDN
-        r, d, info = self.env.step(global_action)
+        r, d, info = self.env.step(global_action, action_dict)
         # action = [value[0] for value in action_dict.values()]
         # r, d, info = self.env.step(action)
         ###############
@@ -240,7 +240,7 @@ class RLlibVoltageControl(MultiAgentEnv):
                 "obs": np.float32(o[index]),
                 "state": np.float32(s),
             }
-            rewards[agent] = r
+            rewards[agent] = r[agent]
         dones = {"__all__": d}
         return obs, rewards, dones, {}
 

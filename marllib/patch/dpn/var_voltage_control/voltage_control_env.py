@@ -64,6 +64,7 @@ class VoltageControl(MultiAgentEnv):
         self.q_weight = getattr(args, "q_weight", 0.1)
         self.line_weight = getattr(args, "line_weight", None)
         self.dv_dq_weight = getattr(args, "dq_dv_weight", None)
+        self.main_weight = 0.8  # peso del componente global del reward
 
         # define constraints and uncertainty
         self.v_upper = getattr(args, "v_upper", 1.05)
@@ -181,20 +182,20 @@ class VoltageControl(MultiAgentEnv):
 
         return self.get_obs(), self.get_state()
 
-    def step(self, actions, add_noise=False):  # TODO: original = True
+    def step(self, global_action, action_dict, add_noise=False):  # TODO: original = True
         """function for the interaction between agent and the env each time step
         """
         last_powergrid = copy.deepcopy(self.powergrid)
 
         # check whether the power balance is unsolvable
-        solvable = self._take_action(actions)
+        solvable = self._take_action(global_action)
         if solvable:
             # get the reward of current actions
-            reward, info = self._calc_reward()
+            reward, info = self._calc_reward(action_dict)
         else:
             q_loss = np.mean( np.abs(self.powergrid.sgen["q_mvar"]) )
             self.powergrid = last_powergrid
-            reward, info = self._calc_reward()
+            reward, info = self._calc_reward(action_dict)
             reward -= 200.
             # keep q_loss
             info["destroy"] = 1.
@@ -206,7 +207,7 @@ class VoltageControl(MultiAgentEnv):
 
         # terminate if episode_limit is reached
         self.steps += 1
-        self.sum_rewards += reward
+        self.sum_rewards += sum(reward.values())
         if self.steps >= self.episode_limit or not solvable:
             terminated = True
         else:
@@ -626,7 +627,7 @@ class VoltageControl(MultiAgentEnv):
         reactive_power_constraint = np.sqrt(self.s_max**2 - active_power**2)
         return reactive_power_constraint * reactive_actions
     
-    def _calc_reward(self, info={}):
+    def _calc_reward(self, action_dict, info={}):
         """reward function
         consider 5 possible choices on voltage barrier functions:
             l1
@@ -659,21 +660,58 @@ class VoltageControl(MultiAgentEnv):
         q = self.powergrid.res_sgen["q_mvar"].sort_index().to_numpy(copy=True)
         q_loss = np.mean(np.abs(q))
         info["q_loss"] = q_loss  # Promedio de potencia reactiva
-
-        # reward function
-        ## voltage barrier function
-        v_loss = np.mean(self.voltage_barrier.step(v)) * self.voltage_weight
-        ## add soft constraint for line or q
-        # Se puede agregar loss de la línea o el loss de potencia reactiva
-        if self.line_weight != None:
-            loss = avg_line_loss * self.line_weight + v_loss
-        elif self.q_weight != None:
-            loss = q_loss * self.q_weight + v_loss
-        else:
-            raise NotImplementedError("Please at least give one weight, either q_weight or line_weight.")
-        reward = -loss
+        #############
+        # # reward function original
+        # ## voltage barrier function
+        # v_loss = np.mean(self.voltage_barrier.step(v)) * self.voltage_weight
+        # ## add soft constraint for line or q
+        # # Se puede agregar loss de la línea o el loss de potencia reactiva
+        # if self.line_weight != None:
+        #     loss = avg_line_loss * self.line_weight + v_loss
+        # elif self.q_weight != None:
+        #     loss = q_loss * self.q_weight + v_loss
+        # else:
+        #     raise NotImplementedError("Please at least give one weight, either q_weight or line_weight.")
+        # reward = -loss
         # print(self.steps, ' ---- v_loss: ', v_loss,' - ', 'q_loss: ', q_loss)
 
+        # rewards separados
+        v_loss = np.zeros(self.n_agents + 1)
+        line_loss = np.zeros(self.n_agents + 1)
+        q_loss = np.zeros(self.n_agents + 1)
+        reward = dict()
+        names = [name for name in action_dict.keys()]
+        names.insert(0, 'main')
+        for i in range(self.n_agents+1):
+            zone_name = "main" if i == 0 else f"zone{i}"
+
+            v_zone = self.powergrid.res_bus["vm_pu"].loc[self.powergrid.bus["zone"] == zone_name]
+            v_loss[i] = np.mean(self.voltage_barrier.step(v_zone))
+
+            bus_in_zone = self.powergrid.bus.index[self.powergrid.bus["zone"] == zone_name]
+            p_zone = self.powergrid.res_line["pl_mw"].loc[self.powergrid.line["to_bus"].isin(bus_in_zone)]
+            #p_zone = self.powergrid.res_line["pl_mw"].loc[self.powergrid.bus["zone"] == zone_name]  # TODO: res_line tiene un item menos que bus, restar uno al índice
+            line_loss[i] = np.mean(np.abs(p_zone))
+
+            q_zone = self.powergrid.res_sgen["q_mvar"].loc[self.powergrid.sgen["name"] == zone_name]
+            q_loss[i] = np.mean(np.abs(q_zone))  # abs iguala q inductivo y capacitivo?
+
+        if np.isnan(q_loss[0]):
+            q_loss[0] = 0.0
+        for i in range(self.n_agents):
+            # loss de cada agente más el loss del main
+            v_loss_total = v_loss[i+1] + v_loss[0] * self.main_weight
+            line_loss_total = line_loss[i+1] + line_loss[0] * self.main_weight
+            q_loss_total = q_loss[i+1] + q_loss[0] * self.main_weight  # si no hay panel --> q_loss[0] = Nan
+            if self.line_weight != None:
+                loss = line_loss_total * self.line_weight + v_loss_total * self.voltage_weight
+            elif self.q_weight != None:
+                loss = q_loss_total * self.q_weight + v_loss_total * self.voltage_weight
+            else:
+                raise NotImplementedError("Please at least give one weight, either q_weight or line_weight.")
+            reward[names[i+1]] = -loss
+
+        #############
         # record destroy
         info["destroy"] = 0.0
 

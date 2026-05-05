@@ -62,7 +62,7 @@ def run_mappo(model: Any, exp: Dict, run: Dict, env: Dict,
     for bug mentioned https://github.com/ray-project/ray/pull/20743
     make sure sgd_minibatch_size > max_seq_len
     """
-    train_batch_size = _param["batch_episode"] * env["episode_limit"]
+    train_batch_size = 960 # _param["batch_episode"] * env["episode_limit"]
     if "fixed_batch_timesteps" in exp:
         train_batch_size = exp["fixed_batch_timesteps"]
     sgd_minibatch_size = train_batch_size
@@ -119,7 +119,14 @@ def run_mappo(model: Any, exp: Dict, run: Dict, env: Dict,
                        stop=stop,
                        config=config,
                        verbose=1,
-                       progress_reporter=CLIReporter(),
+                       progress_reporter=CLIReporter(metric_columns={
+                                "training_iteration": "iter",
+                                "timesteps_total": "ts",
+                                "episode_reward_mean": "reward",
+                                "mean_loss": "loss",
+                                # "custom_metrics/vvio": "Viol V",
+                            },
+                           max_report_frequency=10,),
                        local_dir=available_local_dir if exp["local_dir"] == "" else exp["local_dir"])
 
     return results
