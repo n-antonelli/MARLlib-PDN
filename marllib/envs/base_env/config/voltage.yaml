@@ -26,6 +26,7 @@ env_args:
     "map_name": "case33_3min_final" # 'case33_3min_final', 'case141_3min_final'
     "voltage_barrier_type": "l1" # "l1", "l2", "bowl", "courant_beltrami", "bump"
     "voltage_weight": 1.0
+    "main_weight": 0.8
     "q_weight": 0.1
     "line_weight": null
     "dq_dv_weight": null

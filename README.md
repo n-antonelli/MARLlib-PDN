@@ -426,7 +426,7 @@ Works that are based on or closely collaborate with MARLlib <[link](https://gith
 distributed: each zone is equipped with several PV generators and each PV generator is an agent
 decentralised: each zone is controlled by an agent and each agent may have variant number of actions
 
-26.5.04
+26.05.04
 distributed: Corre pero los agentes tienen iguales rewards
 Plan de acción: 
 * Ajuste gamma a 0.99 o 0.995 -  porque con 480 pasos por episodios, puede perderse lo que sucede al final
@@ -438,3 +438,6 @@ Plan de acción:
 * LR y Shedule - Pasar de 5e-4, prueba con 1e-4 o incluso 5e-5 para que el loss sea más suave
 * Reward Shaping - Revisa los coeficientes
 * Configuración del Buffer y Batch Size - Aumentar el train_batch_size
+
+26.05.08
+En voltage_control_env modificar un nuevo dataframe de powergrid que almacene el voltage, q y p por cada step

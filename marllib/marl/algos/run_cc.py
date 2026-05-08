@@ -26,7 +26,7 @@ from ray import tune
 from ray.rllib.utils.framework import try_import_tf, try_import_torch
 from marllib.marl.algos.scripts import POlICY_REGISTRY
 from marllib.marl.common import recursive_dict_update, dict_update
-import os
+from marllib.envs.base_env.voltage import PowerGridCallbacks
 
 torch, nn = try_import_torch()
 
@@ -36,16 +36,19 @@ def restore_config_update(exp_info, run_config, stop_config):
         restore_config = None
     else:
         restore_config = exp_info['restore_path']
+        render_config = {
+            "evaluation_interval": 1,
+            "evaluation_num_episodes": 2,
+            "evaluation_num_workers": 1,
+            "evaluation_config": {
+                "record_env": False,
+                "render_env": True,
+                "explore": False,
+            },
+            # "evaluation_duration": 5,
+
+        }
         if 'render' in exp_info['restore_path']:
-            render_config = {
-                "evaluation_interval": 1,
-                "evaluation_num_episodes": 100,
-                "evaluation_num_workers": 1,
-                "evaluation_config": {
-                    "record_env": False,
-                    "render_env": True,
-                }
-            }
 
             run_config = recursive_dict_update(run_config, render_config)
 
@@ -211,7 +214,8 @@ def run_cc(exp_info, env, model, stop=None):
         },
         "framework": exp_info["framework"],
         "evaluation_interval": exp_info["evaluation_interval"],
-        "simple_optimizer": False  # force using better optimizer
+        "simple_optimizer": False,  # force using better optimizer
+        "callbacks": PowerGridCallbacks,
     }
 
     stop_config = {

@@ -84,6 +84,7 @@ def run_mappo(model: Any, exp: Dict, run: Dict, env: Dict,
     back_up_config.pop("algo_args")  # clean for grid_search
 
     config = {
+        # "standardize_rewards": True,
         "observation_filter": "MeanStdFilter",
         "batch_mode": batch_mode,
         "train_batch_size": train_batch_size,
@@ -114,7 +115,7 @@ def run_mappo(model: Any, exp: Dict, run: Dict, env: Dict,
                        name=RUNNING_NAME,
                        checkpoint_at_end=exp['checkpoint_end'],
                        checkpoint_freq=exp['checkpoint_freq'],
-                       keep_checkpoints_num=exp['num_to_keep'],
+                       keep_checkpoints_num=2,
                        restore=model_path,
                        stop=stop,
                        config=config,
@@ -126,7 +127,7 @@ def run_mappo(model: Any, exp: Dict, run: Dict, env: Dict,
                                 "mean_loss": "loss",
                                 # "custom_metrics/vvio": "Viol V",
                             },
-                           max_report_frequency=10,),
+                           max_report_frequency=50,),
                        local_dir=available_local_dir if exp["local_dir"] == "" else exp["local_dir"])
 
     return results

@@ -92,8 +92,8 @@ def centralized_critic_postprocessing(policy,
             global_state_end = action_mask_dim + total_state_dim
             obs_start = 0
             obs_end = action_mask_dim
-            state_portion = sample_batch['obs'][:, global_state_start:global_state_end]  # 25 dims
-            obs_portion = sample_batch['obs'][:, obs_start:obs_end]  # 17 dims
+            state_portion = sample_batch['obs'][:, global_state_start:global_state_end]  #  dims
+            obs_portion = sample_batch['obs'][:, obs_start:obs_end]  #  dims
             sample_batch["state"] = state_portion
         ############
         else:  # need opponent info

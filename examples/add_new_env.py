@@ -40,8 +40,9 @@ from marllib import marl
 from marllib.envs.base_env import ENV_REGISTRY
 import time
 
-mode = 'train'  # 'eval'
-
+mode = 'eval'  # 'eval'/'train'
+num_chec = 900
+path = "MAPPOTrainer_voltage_case33_3min_final_c40b8_00000_0_2026-05-05_12-54-57"
 
 # register all scenario with env class
 REGISTRY = {}
@@ -142,20 +143,25 @@ if __name__ == '__main__':
                 "ippo": marl.algos.ippo,
                 "vdppo": marl.algos.vdppo
                 }
-    # pick algorithms
-    algo = eleccion[algoritmo](hyperparam_source="common")
-    # customize model
-    model = marl.build_model(env, algo, {"core_arch": "mlp"}) #, "encode_layer": "128-128"})
-    print(env)
     if mode == 'train':
+        # pick algorithms
+        algo = eleccion[algoritmo](hyperparam_source="common")
+        # customize model
+        model = marl.build_model(env, algo, {"core_arch": "mlp"}) #, "encode_layer": "128-128"})
+        print(env)
         # start learning
         algo.fit(env, model, stop={'episode_reward_mean': -1, 'timesteps_total': 10000000}, share_policy='individual', checkpoint_freq=100, num_to_keep=2)  # num_workers=2
 
     elif mode == 'eval':
+        # pick algorithms
+        algo = eleccion[algoritmo](hyperparam_source="test")
+        # customize model
+        model = marl.build_model(env, algo, {"core_arch": "mlp"})  # , "encode_layer": "128-128"})
+        print(env)
         # rendering
         algo.render(env, model,
-                     restore_path={'params_path': "checkpoint/params.json",  # experiment configuration
-                                   'model_path': "checkpoint/checkpoint-6250", # checkpoint path
+                     restore_path={'params_path': f"C:\\Users\\Usuario\\Documents\\Programas\\MARLlib-PDN\\examples\\exp_results\\mappo_mlp_case33_3min_final\\{path}\\params.json",  # experiment configuration
+                                   'model_path': f"C:\\Users\\Usuario\\Documents\\Programas\\MARLlib-PDN\\examples\\exp_results\\mappo_mlp_case33_3min_final\\{path}\\checkpoint_000{num_chec}\\checkpoint-{num_chec}", # checkpoint path
                                    'render': True},  # render
                      local_mode=True,
                      share_policy="individual",

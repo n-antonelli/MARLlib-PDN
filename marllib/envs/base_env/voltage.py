@@ -26,6 +26,8 @@ import numpy as np
 from gym.spaces import Dict as GymDict, Box, Space
 import os
 import gymnasium
+from ray.rllib.agents.callbacks import DefaultCallbacks
+import copy
 
 mode = 'decentralised'  # distributed
 if mode == 'decentralised':
@@ -72,6 +74,32 @@ def flat_dim(space: Space) -> int:
         return sum(flat_dim(sub) for sub in space.spaces.values())
     else:
         raise NotImplementedError(f"No sé calcular dimensión de {type(space)}")
+
+
+class PowerGridCallbacks(DefaultCallbacks):
+    def __init__(self):
+        self.agent_ids = {}
+    def on_episode_end(self, *, worker, base_env, policies, episode, env_index, **kwargs):
+        # Acceder al info del último paso del episodio
+        # Suponiendo que tus agentes se llaman 'zone1', 'zone2', etc.
+        for agent in episode.get_agents():
+            self.agent_ids[agent] = agent.replace("agent_", "").replace("_", "")
+
+        voltages = []
+        losses = []
+
+        powergrid = copy.deepcopy(worker.env.env.powergrid)
+
+        for aid in self.agent_ids.keys():
+            last_info = episode.last_info_for(aid)
+            if last_info and "mean_voltage" in last_info:
+                voltages.append(last_info["mean_voltage"])
+                losses.append(last_info["power_loss"])
+
+        # Guardar en custom_metrics (esto es lo que aparece en progress.csv)
+        if voltages:
+            episode.custom_metrics["v_mean_system"] = np.mean(voltages)
+            episode.custom_metrics["p_loss_total"] = np.sum(losses)
 
 class RLlibVoltageControl(MultiAgentEnv):
 

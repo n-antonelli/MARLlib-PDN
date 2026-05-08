@@ -64,7 +64,7 @@ class VoltageControl(MultiAgentEnv):
         self.q_weight = getattr(args, "q_weight", 0.1)
         self.line_weight = getattr(args, "line_weight", None)
         self.dv_dq_weight = getattr(args, "dq_dv_weight", None)
-        self.main_weight = 0.8  # peso del componente global del reward
+        self.main_weight = getattr(args, "main_weight", None)  # peso del componente global del reward
 
         # define constraints and uncertainty
         self.v_upper = getattr(args, "v_upper", 1.05)
@@ -189,18 +189,31 @@ class VoltageControl(MultiAgentEnv):
 
         # check whether the power balance is unsolvable
         solvable = self._take_action(global_action)
-        if solvable:
-            # get the reward of current actions
-            reward, info = self._calc_reward(action_dict)
-        else:
+        info = {'solvable': solvable}
+        if not solvable:
+            self.powergrid = last_powergrid  # restaurar ANTES de calcular reward
+        # get the reward of current actions
+        reward, info = self._calc_reward(action_dict, info)
+        if not solvable:
+            # print('Normal Reward: ', reward)
+        # else:
             q_loss = np.mean( np.abs(self.powergrid.sgen["q_mvar"]) )
-            self.powergrid = last_powergrid
-            reward, info = self._calc_reward(action_dict)
-            reward -= 200.
+            print('Destroy Reward: ', reward)
+            # for agent in reward.keys():
+            #     reward[agent] -= 1  # 200.
             # keep q_loss
             info["destroy"] = 1.
             info["totally_controllable_ratio"] = 0.
             info["q_loss"] = q_loss
+        # Agregar info de cada agente
+        # for agent_id in action_dict.keys():
+        #     # Ejemplo: guardar la tensión media de la zona del agente
+        #     idx = int(agent_id.replace("zone", ""))
+        #     info[agent_id].update({
+        #         "mean_voltage": v_loss[idx],  # O el valor real vm_pu
+        #         "power_loss": line_loss[idx],
+        #         "q_injected": q_loss[idx]
+        #     })
 
         # set the pv and demand for the next time step
         self._set_demand_and_pv(add_noise=add_noise)
@@ -639,17 +652,17 @@ class VoltageControl(MultiAgentEnv):
         # percentage of voltage out of control
         v = self.powergrid.res_bus["vm_pu"].sort_index().to_numpy(copy=True)
         percent_of_v_out_of_control = ( np.sum(v < self.v_lower) + np.sum(v > self.v_upper) ) / v.shape[0]
-        info["percentage_of_v_out_of_control"] = percent_of_v_out_of_control
-        info["percentage_of_lower_than_lower_v"] = np.sum(v < self.v_lower) / v.shape[0]
-        info["percentage_of_higher_than_upper_v"] = np.sum(v > self.v_upper) / v.shape[0]
-        info["totally_controllable_ratio"] = 0. if percent_of_v_out_of_control > 1e-3 else 1.
+        info["percentage_of_v_out_of_control"] = percent_of_v_out_of_control  # porcentaje de tensión fuera de control
+        info["percentage_of_lower_than_lower_v"] = np.sum(v < self.v_lower) / v.shape[0]  # porcentaje de tensión baja
+        info["percentage_of_higher_than_upper_v"] = np.sum(v > self.v_upper) / v.shape[0]  # porcentaje de tensión alta
+        info["totally_controllable_ratio"] = 0. if percent_of_v_out_of_control > 1e-3 else 1.  # porcentaje de tensión controlable
 
         # voltage violation
         v_ref = 0.5 * (self.v_lower + self.v_upper)
-        info["average_voltage_deviation"] = np.mean( np.abs( v - v_ref ) )
-        info["average_voltage"] = np.mean(v)
-        info["max_voltage_drop_deviation"] = np.max( (v < self.v_lower) * (self.v_lower - v) )
-        info["max_voltage_rise_deviation"] = np.max( (v > self.v_upper) * (v - self.v_upper) )
+        info["average_voltage_deviation"] = np.mean( np.abs( v - v_ref ) )  # promedio de desviación de tensión
+        info["average_voltage"] = np.mean(v)  # promedio de tensión
+        info["max_voltage_drop_deviation"] = np.max( (v < self.v_lower) * (self.v_lower - v) )  # máxima desviación de tensión por encima
+        info["max_voltage_rise_deviation"] = np.max( (v > self.v_upper) * (v - self.v_upper) )  # máxima desviación de tensión por debajo
 
         # line loss
         line_loss = np.sum(self.powergrid.res_line["pl_mw"])
@@ -676,46 +689,94 @@ class VoltageControl(MultiAgentEnv):
         # print(self.steps, ' ---- v_loss: ', v_loss,' - ', 'q_loss: ', q_loss)
 
         # rewards separados
-        v_loss = np.zeros(self.n_agents + 1)
-        line_loss = np.zeros(self.n_agents + 1)
-        q_loss = np.zeros(self.n_agents + 1)
+        q_weight_solv = self.q_weight * 2 if not info['solvable'] else self.q_weight
         reward = dict()
-        names = [name for name in action_dict.keys()]
-        names.insert(0, 'main')
-        for i in range(self.n_agents+1):
-            zone_name = "main" if i == 0 else f"zone{i}"
+        # v_loss = np.zeros(self.n_agents + 1)
+        # line_loss = np.zeros(self.n_agents + 1)
+        # q_loss = np.zeros(self.n_agents + 1)
+        # names = [name for name in action_dict.keys()]
+        # names.insert(0, 'main')
+        # for i in range(self.n_agents+1):
+        #     zone_name = "main" if i == 0 else f"zone{i}"
+        #
+        #     v_zone = self.powergrid.res_bus["vm_pu"].loc[self.powergrid.bus["zone"] == zone_name]
+        #     v_loss[i] = np.mean(self.voltage_barrier.step(v_zone))
+        #
+        #     bus_in_zone = self.powergrid.bus.index[self.powergrid.bus["zone"] == zone_name]
+        #     p_zone = self.powergrid.res_line["pl_mw"].loc[self.powergrid.line["to_bus"].isin(bus_in_zone)]
+        #     #p_zone = self.powergrid.res_line["pl_mw"].loc[self.powergrid.bus["zone"] == zone_name]
+        #     line_loss[i] = np.mean(np.abs(p_zone))
+        #
+        #     q_zone = self.powergrid.res_sgen["q_mvar"].loc[self.powergrid.sgen["name"] == zone_name]
+        #     q_loss[i] = np.mean(np.abs(q_zone))  # abs iguala q inductivo y capacitivo
+        #
+        # if np.isnan(q_loss[0]):
+        #     q_loss[0] = 0.0
+        # for i, name in enumerate(names):  # TODO: hacer modificaciones (gemini) para no depender de orden de nombres
+        #     if name != 'main':
+        #         # loss de cada agente más el loss del main
+        #         v_loss_total = v_loss[i] + v_loss[0] * self.main_weight
+        #         line_loss_total = line_loss[i] + line_loss[0] * self.main_weight
+        #         q_loss_total = q_loss[i] + q_loss[0] * self.main_weight  # si no hay panel --> q_loss[0] = Nan
+        #         if self.line_weight != None:
+        #             loss = line_loss_total * self.line_weight + v_loss_total * self.voltage_weight
+        #         elif self.q_weight != None:
+        #             loss = q_loss_total * q_weight_solv + v_loss_total * self.voltage_weight
+        #         else:
+        #             raise NotImplementedError("Please at least give one weight, either q_weight or line_weight.")
+        #         reward[name] = -loss
+        #
+        # #############
+        # # record destroy
+        # info["destroy"] = 0.0
+        #
+        # return reward, info
 
-            v_zone = self.powergrid.res_bus["vm_pu"].loc[self.powergrid.bus["zone"] == zone_name]
-            v_loss[i] = np.mean(self.voltage_barrier.step(v_zone))
 
-            bus_in_zone = self.powergrid.bus.index[self.powergrid.bus["zone"] == zone_name]
-            p_zone = self.powergrid.res_line["pl_mw"].loc[self.powergrid.line["to_bus"].isin(bus_in_zone)]
-            #p_zone = self.powergrid.res_line["pl_mw"].loc[self.powergrid.bus["zone"] == zone_name]  # TODO: res_line tiene un item menos que bus, restar uno al índice
-            line_loss[i] = np.mean(np.abs(p_zone))
 
-            q_zone = self.powergrid.res_sgen["q_mvar"].loc[self.powergrid.sgen["name"] == zone_name]
-            q_loss[i] = np.mean(np.abs(q_zone))  # abs iguala q inductivo y capacitivo?
+        v_losses = {}
+        line_losses = {}
+        q_losses = {}
 
-        if np.isnan(q_loss[0]):
-            q_loss[0] = 0.0
-        for i in range(self.n_agents):
-            # loss de cada agente más el loss del main
-            v_loss_total = v_loss[i+1] + v_loss[0] * self.main_weight
-            line_loss_total = line_loss[i+1] + line_loss[0] * self.main_weight
-            q_loss_total = q_loss[i+1] + q_loss[0] * self.main_weight  # si no hay panel --> q_loss[0] = Nan
-            if self.line_weight != None:
-                loss = line_loss_total * self.line_weight + v_loss_total * self.voltage_weight
-            elif self.q_weight != None:
-                loss = q_loss_total * self.q_weight + v_loss_total * self.voltage_weight
+        zones = [f"zone{i}" for i in range(1, self.n_agents + 1)] + ["main"]
+
+        for zone in zones:
+            # --- Cálculo de V-Loss ---
+            v_zone = self.powergrid.res_bus["vm_pu"].loc[self.powergrid.bus["zone"] == zone]
+            v_losses[zone] = np.mean(self.voltage_barrier.step(v_zone))
+
+            # --- Cálculo de Line-Loss (con mapeo to_bus para evitar el error 33 vs 32) ---
+            buses_in_zone = self.powergrid.bus.index[self.powergrid.bus["zone"] == zone]
+            p_zone_lines = self.powergrid.res_line["pl_mw"].loc[self.powergrid.line["to_bus"].isin(buses_in_zone)]
+            line_losses[zone] = np.mean(np.abs(p_zone_lines)) if not p_zone_lines.empty else 0.0
+
+            # --- Cálculo de Q-Loss (Sgen) ---
+            q_vals = self.powergrid.res_sgen["q_mvar"].loc[self.powergrid.sgen["name"] == zone]
+            # Manejo de NaNs: si no hay sgen o es NaN, ponemos 0.0
+            q_losses[zone] = np.nan_to_num(np.mean(np.abs(q_vals))) if not q_vals.empty else 0.0
+        if np.isnan(q_losses["main"]):
+            q_losses["main"] = 0.0
+        # 2. Asignamos los rewards a los agentes usando el mapeo de nombres
+        for agent_name in action_dict.keys():
+            # Si el agente se llama 'agent_zone_1', la zona es 'zone_1'
+            zone_id = agent_name.replace("agent_", "").replace("_", "")
+
+            # Mezclamos pérdida local + pérdida de la cabecera (main)
+            # Reward_i = -(Loss_local + weight * Loss_main)
+            v_total = v_losses[zone_id] + v_losses["main"] * self.main_weight
+
+            if self.line_weight is not None:
+                l_total = line_losses[zone_id] + line_losses["main"] * self.main_weight
+                loss = l_total * self.line_weight + v_total * self.voltage_weight
             else:
-                raise NotImplementedError("Please at least give one weight, either q_weight or line_weight.")
-            reward[names[i+1]] = -loss
+                q_total = q_losses[zone_id] + q_losses["main"] * self.main_weight
+                loss = q_total * q_weight_solv + v_total * self.voltage_weight
 
-        #############
-        # record destroy
+            reward[agent_name] = -float(loss)
+
         info["destroy"] = 0.0
-
         return reward, info
+
 
     def _get_res_bus_v(self):
         v = self.powergrid.res_bus["vm_pu"].sort_index().to_numpy(copy=True)
