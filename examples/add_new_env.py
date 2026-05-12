@@ -40,9 +40,9 @@ from marllib import marl
 from marllib.envs.base_env import ENV_REGISTRY
 import time
 
-mode = 'eval'  # 'eval'/'train'
-num_chec = 900
-path = "MAPPOTrainer_voltage_case33_3min_final_c40b8_00000_0_2026-05-05_12-54-57"
+mode = 'train'  # 'eval'/'train'
+num_chec = 600
+path = "MAPPOTrainer_voltage_case33_3min_final_33bb4_00000_0_2026-05-11_12-36-39"
 
 # register all scenario with env class
 REGISTRY = {}

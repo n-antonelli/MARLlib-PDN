@@ -127,7 +127,7 @@ def run_mappo(model: Any, exp: Dict, run: Dict, env: Dict,
                                 "mean_loss": "loss",
                                 # "custom_metrics/vvio": "Viol V",
                             },
-                           max_report_frequency=50,),
+                           max_report_frequency=100,),
                        local_dir=available_local_dir if exp["local_dir"] == "" else exp["local_dir"])
 
     return results

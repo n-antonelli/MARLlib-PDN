@@ -3,6 +3,7 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
+import pandas as pd
 
 # def reward_function(v):
 #     if np.abs(v) < 1:
@@ -42,11 +43,11 @@ dirección = {
 }
 
 device = 'oficina'
-mode = 'train'
+mode = 'eval'
 
-train_path = 'MAPPOTrainer_voltage_case33_3min_final_f55e7_00000_0_2026-05-07_12-03-51'
+train_path = 'MAPPOTrainer_voltage_case33_3min_final_33bb4_00000_0_2026-05-11_12-36-39'
 
-eval_path = 'MAPPOTrainer_PGW_PGW_4029c_00000_0_2025-08-23_18-43-48'
+eval_path = 'MAPPOTrainer_voltage_case33_3min_final_00211_00000_0_2026-05-12_11-36-45'
 cantidad_agentes = 4
 
 if device == 'oficina':
@@ -54,6 +55,10 @@ if device == 'oficina':
 else:
     url = 'C:\\Users\\Nicolas\\Documents\\UNSL\\Programas\\MARLlib-PDN'
 
+steps = np.arange(480)
+time_index = pd.date_range(start="00:00", periods=480, freq="3min")
+time_labels = time_index.strftime("%H:%M")
+tick_positions = np.arange(0, 480, 40)  # cada 48 steps = cada 2.4 hs ~ cada 2hs
 
 def calcular_promedio_movil(datos, tamano_ventana):
     """
@@ -93,11 +98,16 @@ if mode == 'train':
         train_data = []
         for episode in file:
             train_data.append(json.loads(episode))
+    df = pd.read_csv(f'{url}\\examples\\exp_results\\mappo_mlp_case33_3min_final\\{train_path}\\results\\physical_log_20260511_123646.csv')
 
     agents = train_data[0]['config']['model']['custom_model_config']['policy_mapping_info']['case33_3min_final']['team_prefix']
     agents = [f'agent_zone_{i+1}' for i in range(cantidad_agentes)]
     pol_agents = {f'agent_zone_{i+1}': f'pol_agent_zone_{i+1}' for i in range(cantidad_agentes)}
     figl, axl = plt.subplots(1,len(agents)+1, figsize=(12, 6))
+    figr, axr = plt.subplots(1,len(agents)+1, figsize=(16, 6))
+    figv, axv = plt.subplots(3, 1, figsize=(12, 10))
+    figp, axp = plt.subplots(figsize=(12, 6))
+
     loss_episode = []
     loss_episode_ag0 = []
     loss_episode_ag1 = []
@@ -105,7 +115,7 @@ if mode == 'train':
     loss_episode_ag3 = []
     loss_episode_ag4 = []
 
-    figr, axr = plt.subplots(1,len(agents)+1, figsize=(16, 6))
+
     reward_policy = []
     reward_episode = []
     reward_episode_ag0 = []
@@ -114,10 +124,8 @@ if mode == 'train':
     reward_episode_ag3 = []
     reward_episode_ag4 = []
 
-    figv, axv = plt.subplots(figsize=(12, 6))
     vvio = []
 
-    figp, axp = plt.subplots(figsize=(12, 6))
     powerp_1 = []
     powerp_2 = []
     powerp_3 = []
@@ -176,13 +184,18 @@ if mode == 'train':
                     # agents[4]: loss_episode_ag4,
                     }
 
+    loss_episode = [a + b + c + d for a, b, c, d in zip(loss_episode_ag0, loss_episode_ag1, loss_episode_ag2, loss_episode_ag3)]
     # axl.plot(range(0, len(loss_episode)), np.asarray(loss_episode), label=f'loss')
     for i in range(len(agents) + 1):
         if i == len(agents):
-            axr[i].plot(range(0, len(loss_episode)), np.asarray(loss_episode), label='total_rew')
+            axl[i].set_title(f'Total loss')
+            axl[i].plot(range(0, len(loss_episode)), np.asarray(loss_episode), label='total_rew')
+            axl[i].legend(loc='best')
         else:
-            axl[i].set_title(f'{algoritmo} loss - {agents[i]}')
+            axl[i].set_title(f'Loss - {agents[i]}')
             axl[i].plot(range(0, len(loss_episode_ag[agents[i]])), np.asarray(loss_episode_ag[agents[i]]), label=f'loss_{agents[i]}')
+            axl[i].legend(loc='best')
+
 
     reward_episode_ag = {agents[0]: reward_episode_ag0,
                          agents[1]: reward_episode_ag1,
@@ -244,50 +257,85 @@ if mode == 'train':
     # # axp1.plot(range(0, len(p_consumed_building_storage)), np.asarray(p_consumed_building_storage), label=f'building_storage')
     # # axp1.legend()
     # # figp1.show()
-    # print(p_consumed_ev)  # TODO: Hay que promediar en 'on_episode_step'?
+    # print(p_consumed_ev)
+
+    ep = df.groupby("episode").mean()
+    axv[0].set_title("Voltaje medio por episodio")
+    axv[1].set_title("Potencia reactiva generada")
+    axv[2].set_title("Porcentaje potencia perdida de línea")
+    # axv1 = axv.twinx()
+    # axv2 = axv.twinx()
+    axv[0].plot(range(0, len(ep["v_mean"])), np.asarray(ep["v_mean"]), label='v_mean')
+    axv[1].plot(range(0, len(ep["q_total"])), np.asarray(ep["q_total"]), label='q_total', color='green')
+    axv[2].plot(range(0, len(ep["line_loading"])), np.asarray(ep["line_loading"]), label='line_loading', color='red')
+    axv[0].legend(loc='best')
+    axv[1].legend(loc='best')
+    axv[2].legend(loc='best')
+    figv.show()
 
     # ------ evaluación ------
 elif mode == 'eval':
-    with open(f'{url}'
-              f'\\examples\\exp_results\\{algoritmo}_mlp_PGW'
-              f'\\{eval_path}'
-              '\\eval_data1.json',
-              'r') as file:
-        eval_data = []
-        for episode in file:
-            eval_data.append(json.loads(episode))
-    agents = eval_data[0]["rewards"].keys()
-    figre, axre = plt.subplots(figsize=(12, 6))
-    figve, axve = plt.subplots(figsize=(12, 6))
-    figppe, axppe = plt.subplots(figsize=(12, 6))
-    figpce, axpce = plt.subplots(figsize=(12, 6))
+    # with open(f'{url}'
+    #           f'\\examples\\exp_results\\{algoritmo}_mlp_PGW'
+    #           f'\\{eval_path}'
+    #           '\\eval_data1.json',
+    #           'r') as file:
+    #     eval_data = []
+    #     for episode in file:
+    #         eval_data.append(json.loads(episode))
+    df = pd.read_csv(f'{url}\\examples\\exp_results\\mappo_mlp_case33_3min_final\\{eval_path}\\results\\physical_log.csv')
+    # agents = eval_data[0]["rewards"].keys()
+    agents = [f'agent_zone_{i + 1}' for i in range(cantidad_agentes)]
+    # figre, axre = plt.subplots(figsize=(12, 6))
+    figve, axve = plt.subplots(3, 1, figsize=(12, 6))
+    # figppe, axppe = plt.subplots(figsize=(12, 6))
+    # figpce, axpce = plt.subplots(figsize=(12, 6))
 
-    axre.set_title(f'{algoritmo} episode reward')
-    for agent in agents:
-        axre.plot(range(0, len(eval_data[0]["rewards"][agent])), np.asarray(eval_data[0]["rewards"][agent]), label=f'reward {agent}')
-    axre.legend()
-    figre.show()
+    # axre.set_title(f'{algoritmo} episode reward')
+    # for agent in agents:
+    #     axre.plot(range(0, len(eval_data[0]["rewards"][agent])), np.asarray(eval_data[0]["rewards"][agent]), label=f'reward {agent}')
+    # axre.legend()
+    # figre.show()
+    #
+    # axve.set_title(f'{algoritmo} episode vvio')
+    # axve.plot(range(0, len(eval_data[0]["vvio"])), np.asarray(eval_data[0]["vvio"]), label=f'vvio')
+    # figve.show()
+    #
+    # power_p = {}
+    # for agent in agents:
+    #     power_p[agent] = calcular_promedio_movil(eval_data[0]["power_p"][agent], ventana)
+    # axppe.set_title(f'{algoritmo} episode power p')
+    # for agent in agents:
+    #     axppe.plot(range(0, len(power_p[agent])), np.asarray(power_p[agent]), label=f'power p {agent}')
+    # axppe.legend()
+    # figppe.show()
+    #
+    # components = eval_data[0]["p_consumed"].keys()
+    # power_p_cons = {}
+    # axpce.set_title(f'{algoritmo} episode p consumed')
+    # for comp in components:
+    #     power_p_cons[comp] = calcular_promedio_movil(eval_data[0]["p_consumed"][comp], ventana)
+    #     if 'building' in comp: # Si solo quiero graficar el consumo del edificio
+    #         if 'ff' not in comp:
+    #             axpce.plot(range(0, len(power_p_cons[comp])), np.asarray(power_p_cons[comp]), label=comp)
+    # axpce.legend()
+    # figpce.show()
 
-    axve.set_title(f'{algoritmo} episode vvio')
-    axve.plot(range(0, len(eval_data[0]["vvio"])), np.asarray(eval_data[0]["vvio"]), label=f'vvio')
+    # Por step dentro de un episodio específico
+    ep = df[df["episode"] == 1]  # 1 para summer, 0  para winter
+    ep = ep.iloc[0:480]
+
+    axve[0].set_title("Voltaje medio por episodio")
+    axve[1].set_title("Potencia reactiva generada")
+    axve[2].set_title("Porcentaje potencia perdida de línea")
+    axve[0].plot(time_labels, np.asarray(ep["v_mean"]), label='v_mean')
+    axve[1].plot(time_labels, np.asarray(ep["q_gen_total"]), label='q_gen_total', color='green')
+    axve[2].plot(time_labels, np.asarray(ep["line_loading"]), label='line_loading', color='red')
+    axve[0].set_xticks([])
+    axve[1].set_xticks([])
+    axve[2].set_xticks(tick_positions)
+    axve[2].set_xticklabels(time_labels[tick_positions], rotation=45)
+    axve[0].legend(loc='best')
+    axve[1].legend(loc='best')
+    axve[2].legend(loc='best')
     figve.show()
-
-    power_p = {}
-    for agent in agents:
-        power_p[agent] = calcular_promedio_movil(eval_data[0]["power_p"][agent], ventana)
-    axppe.set_title(f'{algoritmo} episode power p')
-    for agent in agents:
-        axppe.plot(range(0, len(power_p[agent])), np.asarray(power_p[agent]), label=f'power p {agent}')
-    axppe.legend()
-    figppe.show()
-
-    components = eval_data[0]["p_consumed"].keys()
-    power_p_cons = {}
-    axpce.set_title(f'{algoritmo} episode p consumed')
-    for comp in components:
-        power_p_cons[comp] = calcular_promedio_movil(eval_data[0]["p_consumed"][comp], ventana)
-        if 'building' in comp: # Si solo quiero graficar el consumo del edificio
-            if 'ff' not in comp:
-                axpce.plot(range(0, len(power_p_cons[comp])), np.asarray(power_p_cons[comp]), label=comp)
-    axpce.legend()
-    figpce.show()

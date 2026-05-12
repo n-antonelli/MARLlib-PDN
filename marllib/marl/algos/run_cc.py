@@ -215,7 +215,7 @@ def run_cc(exp_info, env, model, stop=None):
         "framework": exp_info["framework"],
         "evaluation_interval": exp_info["evaluation_interval"],
         "simple_optimizer": False,  # force using better optimizer
-        "callbacks": PowerGridCallbacks,
+        # "callbacks": PowerGridCallbacks,
     }
 
     stop_config = {

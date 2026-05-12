@@ -28,6 +28,8 @@ import os
 import gymnasium
 from ray.rllib.agents.callbacks import DefaultCallbacks
 import copy
+import pandas as pd
+from datetime import datetime
 
 mode = 'decentralised'  # distributed
 if mode == 'decentralised':
@@ -82,24 +84,24 @@ class PowerGridCallbacks(DefaultCallbacks):
     def on_episode_end(self, *, worker, base_env, policies, episode, env_index, **kwargs):
         # Acceder al info del último paso del episodio
         # Suponiendo que tus agentes se llaman 'zone1', 'zone2', etc.
-        for agent in episode.get_agents():
-            self.agent_ids[agent] = agent.replace("agent_", "").replace("_", "")
-
+        # for agent in episode.get_agents():
+        #     self.agent_ids[agent] = agent.replace("agent_", "").replace("_", "")
+        #
         voltages = []
-        losses = []
-
-        powergrid = copy.deepcopy(worker.env.env.powergrid)
-
-        for aid in self.agent_ids.keys():
-            last_info = episode.last_info_for(aid)
-            if last_info and "mean_voltage" in last_info:
-                voltages.append(last_info["mean_voltage"])
-                losses.append(last_info["power_loss"])
-
-        # Guardar en custom_metrics (esto es lo que aparece en progress.csv)
-        if voltages:
-            episode.custom_metrics["v_mean_system"] = np.mean(voltages)
-            episode.custom_metrics["p_loss_total"] = np.sum(losses)
+        # losses = []
+        #
+        # powergrid = copy.deepcopy(worker.env.env.powergrid)
+        #
+        # for aid in self.agent_ids.keys():
+        #     last_info = episode.last_info_for(aid)
+        #     if last_info and "mean_voltage" in last_info:
+        #         voltages.append(last_info["mean_voltage"])
+        #         losses.append(last_info["power_loss"])
+        #
+        # # Guardar en custom_metrics (esto es lo que aparece en progress.csv)
+        # if voltages:
+        #     episode.custom_metrics["v_mean_system"] = np.mean(voltages)
+        #     episode.custom_metrics["p_loss_total"] = np.sum(losses)
 
 class RLlibVoltageControl(MultiAgentEnv):
 
@@ -229,8 +231,21 @@ class RLlibVoltageControl(MultiAgentEnv):
         self.agents = ["agent_zone_{}".format(i+1) for i in range(self.num_agents)]
         env_config["map_name"] = net_topology
         self.env_config = env_config
+        # self.physical_data = {}
+        self.episode_buffer = []
+        self.episode_count = 0
+        os.makedirs("results", exist_ok=True)
+        # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.log_path = f"results/physical_log.csv"
 
     def reset(self):
+        # Escribir a CSV solo al final del episodio
+        if self.episode_buffer:
+            df = pd.DataFrame(self.episode_buffer)
+            write_header = not os.path.exists(self.log_path)
+            df.to_csv(self.log_path, mode="a", header=write_header, index=False)
+            self.episode_buffer = []
+            self.episode_count += 1
         o, s = self.env.reset()
         obs = {}
         for index, agent in enumerate(self.agents):
@@ -270,6 +285,20 @@ class RLlibVoltageControl(MultiAgentEnv):
             }
             rewards[agent] = r[agent]
         dones = {"__all__": d}
+        # Acumular datos físicos en memoria
+        self.episode_buffer.append({
+            "episode": self.episode_count,
+
+            "v_mean": float(self.env.powergrid.res_bus["vm_pu"].mean()),
+            "va_degree": float(self.env.powergrid.res_bus["va_degree"].sum()),
+            # "v_min": float(self.powergrid.res_bus["vm_pu"].min()),
+            # "v_max": float(self.powergrid.res_bus["vm_pu"].max()),
+            "p_line_total": float(self.env.powergrid.res_line["pl_mw"].sum()),
+            "q_line_total": float(self.env.powergrid.res_line["ql_mvar"].sum()),
+            "p_gen_total": float(self.env.powergrid.res_sgen["p_mw"].sum()),
+            "q_gen_total": float(self.env.powergrid.res_sgen["q_mvar"].sum()),
+            "line_loading": float(self.env.powergrid.res_line["loading_percent"].mean()),
+        })
         return obs, rewards, dones, {}
 
     def close(self):

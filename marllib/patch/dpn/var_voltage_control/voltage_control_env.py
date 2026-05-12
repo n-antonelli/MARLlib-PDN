@@ -185,6 +185,7 @@ class VoltageControl(MultiAgentEnv):
     def step(self, global_action, action_dict, add_noise=False):  # TODO: original = True
         """function for the interaction between agent and the env each time step
         """
+        custom_metrics = {}
         last_powergrid = copy.deepcopy(self.powergrid)
 
         # check whether the power balance is unsolvable
@@ -214,6 +215,12 @@ class VoltageControl(MultiAgentEnv):
         #         "power_loss": line_loss[idx],
         #         "q_injected": q_loss[idx]
         #     })
+
+        custom_metrics['average_voltage'] = info["average_voltage"]
+        custom_metrics['total_line_loss'] = info["total_line_loss"]
+        custom_metrics['q_loss'] = info["q_loss"]
+
+        self.powergrid['custom_metrics'] = custom_metrics
 
         # set the pv and demand for the next time step
         self._set_demand_and_pv(add_noise=add_noise)
