@@ -29,22 +29,27 @@ algo_args:
   use_gae: True
   lambda: 0.95
   # Entrenamiento
-  lr: 0.0001
-  gamma: 0.98
+  lr: 0.00005  # 0.0001
+  "lr_schedule": [
+      [0, 0.0001],          # inicio
+      [150000, 0.00005],    # mitad del entrenamiento
+      [2000000, 0.00001],   # final
+  ]
+  gamma: 0.995  # 0.98
   num_sgd_iter: 5  # 10
   batch_mode: 'complete_episodes'
-  batch_episode: 10
+  batch_episode: 20  # 10
   # PPO clip
   clip_param: 0.15  # 0.2
-  kl_coeff: 0.1  # 0.2
+  kl_coeff: 0.05  # 0.1  # 0.2
   kl_target: 0.02
   # Crítico
-  vf_clip_param: 20.0  # 50.
-  vf_loss_coeff: 0.1  # valor menor a 1 le da más importancia al actor (política)->el crítico es el que tiene más peso en el loss total
+  vf_clip_param: 1000.0  # 20.0  # 50.
+  vf_loss_coeff: 0.5  # 0.1 # valor menor a 1 le da más importancia al actor (política)->el crítico es el que tiene más peso en el loss total
   # Gradientes
   grad_clip: 0.5
   # Exploración
-  entropy_coeff: 0.01
+  entropy_coeff: 0.005  # 0.01
   # PDN
 #  kl_coeff: 0.2
 #  num_sgd_iter: 5

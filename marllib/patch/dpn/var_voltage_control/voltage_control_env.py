@@ -100,6 +100,10 @@ class VoltageControl(MultiAgentEnv):
         self.voltage_barrier = VoltageBarrier(self.voltage_barrier_type)
         self._rendering_initialized = False
 
+        self.max_v_seen = 1e-6
+        self.max_l_seen = 1e-6
+        self.max_q_seen = 1e-6
+
     def reset(self, reset_time=True):
         """reset the env
         """
@@ -696,8 +700,6 @@ class VoltageControl(MultiAgentEnv):
         # print(self.steps, ' ---- v_loss: ', v_loss,' - ', 'q_loss: ', q_loss)
 
         # rewards separados
-        q_weight_solv = self.q_weight * 2 if not info['solvable'] else self.q_weight
-        reward = dict()
         # v_loss = np.zeros(self.n_agents + 1)
         # line_loss = np.zeros(self.n_agents + 1)
         # q_loss = np.zeros(self.n_agents + 1)
@@ -719,7 +721,7 @@ class VoltageControl(MultiAgentEnv):
         #
         # if np.isnan(q_loss[0]):
         #     q_loss[0] = 0.0
-        # for i, name in enumerate(names):  # TODO: hacer modificaciones (gemini) para no depender de orden de nombres
+        # for i, name in enumerate(names):
         #     if name != 'main':
         #         # loss de cada agente más el loss del main
         #         v_loss_total = v_loss[i] + v_loss[0] * self.main_weight
@@ -733,12 +735,14 @@ class VoltageControl(MultiAgentEnv):
         #             raise NotImplementedError("Please at least give one weight, either q_weight or line_weight.")
         #         reward[name] = -loss
         #
-        # #############
+        #
         # # record destroy
         # info["destroy"] = 0.0
         #
         # return reward, info
 
+        q_weight_solv = self.q_weight * 2 if not info['solvable'] else self.q_weight
+        reward = dict()
 
 
         v_losses = {}
@@ -760,7 +764,7 @@ class VoltageControl(MultiAgentEnv):
             # --- Cálculo de Q-Loss (Sgen) ---
             q_vals = self.powergrid.res_sgen["q_mvar"].loc[self.powergrid.sgen["name"] == zone]
             # Manejo de NaNs: si no hay sgen o es NaN, ponemos 0.0
-            q_losses[zone] = np.nan_to_num(np.mean(np.abs(q_vals))) if not q_vals.empty else 0.0
+            q_losses[zone] = np.nan_to_num(np.mean(np.abs(q_vals))) if not q_vals.empty else 0.0  # TODO: verificar si conviene sacar el abs (capacitivo=inductivo)
         if np.isnan(q_losses["main"]):
             q_losses["main"] = 0.0
         # 2. Asignamos los rewards a los agentes usando el mapeo de nombres
@@ -772,14 +776,34 @@ class VoltageControl(MultiAgentEnv):
             # Reward_i = -(Loss_local + weight * Loss_main)
             v_total = v_losses[zone_id] + v_losses["main"] * self.main_weight
 
+            # Actualizar y escalar tensión
+            self.max_v_seen = max(self.max_v_seen, v_total)
+            v_scaled = v_total / self.max_v_seen
+
             if self.line_weight is not None:
+                # 2a. Calcular pérdidas brutas de línea
                 l_total = line_losses[zone_id] + line_losses["main"] * self.main_weight
-                loss = l_total * self.line_weight + v_total * self.voltage_weight
+
+                # Actualizar y escalar línea
+                self.max_l_seen = max(self.max_l_seen, l_total)
+                l_scaled = l_total / self.max_l_seen
+
+                # Calcular pérdida final ponderada (máximo teórico de cada término es 1)
+                loss = (l_scaled * self.line_weight) + (v_scaled * self.voltage_weight)
             else:
+                # 2b. Calcular pérdidas brutas de reactiva
                 q_total = q_losses[zone_id] + q_losses["main"] * self.main_weight
-                loss = q_total * q_weight_solv + v_total * self.voltage_weight
+
+                # Actualizar y escalar reactiva
+                self.max_q_seen = max(self.max_q_seen, q_total)
+                q_scaled = q_total / self.max_q_seen
+
+                # Calcular pérdida final ponderada
+                loss = (q_scaled * q_weight_solv) + (v_scaled * self.voltage_weight)
 
             reward[agent_name] = -float(loss)
+
+        #############
 
         info["destroy"] = 0.0
         return reward, info

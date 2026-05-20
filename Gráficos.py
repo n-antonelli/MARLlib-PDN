@@ -33,7 +33,7 @@ import pandas as pd
 
 actual_date = datetime.now().date()
 algo = "PPO"
-ventana = 20
+ventana = 10
 algoritmo = "mappo"
 dirección = {
     "mappo" : ['shared_policy','total_loss'],
@@ -43,9 +43,11 @@ dirección = {
 }
 
 device = 'oficina'
-mode = 'eval'
+mode = 'train'
 
-train_path = 'MAPPOTrainer_voltage_case33_3min_final_33bb4_00000_0_2026-05-11_12-36-39'
+train_path = 'MAPPOTrainer_voltage_case33_3min_final_aa900_00000_0_2026-05-19_09-02-53'
+# 'MAPPOTrainer_voltage_case33_3min_final_f66a3_00000_0_2026-05-18_08-23-15'  con line_losses
+# 'MAPPOTrainer_voltage_case33_3min_final_aa900_00000_0_2026-05-19_09-02-53' con q_losses
 
 eval_path = 'MAPPOTrainer_voltage_case33_3min_final_00211_00000_0_2026-05-12_11-36-45'
 cantidad_agentes = 4
@@ -60,34 +62,32 @@ time_index = pd.date_range(start="00:00", periods=480, freq="3min")
 time_labels = time_index.strftime("%H:%M")
 tick_positions = np.arange(0, 480, 40)  # cada 48 steps = cada 2.4 hs ~ cada 2hs
 
-def calcular_promedio_movil(datos, tamano_ventana):
-    """
-    Calcula el promedio móvil de una lista de datos.
+ventana = 50
+def calcular_promedio_movil(datos, ventana, mode):
+    datos = np.asarray(datos, dtype=float)
+    n = len(datos)
 
-    Args:
-        datos (list o np.array): La lista de valores de potencia a promediar.
-        tamano_ventana (int): El número de pasos en la ventana de promediado.
+    if n < ventana:
+        return datos.copy()
 
-    Returns:
-        np.array: Un nuevo array con los datos suavizados.
-    """
-    # Convertir a array de numpy si no lo es, para facilitar las operaciones
-    datos = np.array(datos)
+    offset = ventana // 2
+    resultado = np.zeros(n)
 
-    # Crear un array para almacenar los promedios suavizados
-    datos_suavizados = []
+    # Inicio: ventana creciente (clipping en el borde izquierdo)
+    for i in range(offset):
+        resultado[i] = np.mean(datos[0 : i + offset + 1])
 
-    # Iterar sobre los datos y calcular el promedio para cada ventana
-    # Esto asegura que no salgas de los límites del array
-    for i in range(len(datos) - tamano_ventana + 1):
-        # Selecciona la "ventana" de datos actual
-        ventana = datos[i:i + tamano_ventana]
+    # Centro: ventana completa con convolución
+    kernel = np.ones(ventana) / ventana
+    centro = np.convolve(datos, kernel, mode='valid')
+    resultado[offset : offset + len(centro)] = centro
 
-        # Calcula el promedio de esa ventana y lo añade a la lista
-        promedio_ventana = np.mean(ventana)
-        datos_suavizados.append(promedio_ventana)
+    # Final: ventana decreciente (clipping en el borde derecho)
+    inicio_final = offset + len(centro)
+    for i in range(inicio_final, n):
+        resultado[i] = np.mean(datos[i - offset : n])
 
-    return np.array(datos_suavizados)
+    return resultado
 
 if mode == 'train':
     with open(f'{url}'
@@ -98,7 +98,7 @@ if mode == 'train':
         train_data = []
         for episode in file:
             train_data.append(json.loads(episode))
-    df = pd.read_csv(f'{url}\\examples\\exp_results\\mappo_mlp_case33_3min_final\\{train_path}\\results\\physical_log_20260511_123646.csv')
+    df = pd.read_csv(f'{url}\\examples\\exp_results\\mappo_mlp_case33_3min_final\\{train_path}\\results\\physical_log20260519_090314.csv')
 
     agents = train_data[0]['config']['model']['custom_model_config']['policy_mapping_info']['case33_3min_final']['team_prefix']
     agents = [f'agent_zone_{i+1}' for i in range(cantidad_agentes)]
@@ -187,13 +187,16 @@ if mode == 'train':
     loss_episode = [a + b + c + d for a, b, c, d in zip(loss_episode_ag0, loss_episode_ag1, loss_episode_ag2, loss_episode_ag3)]
     # axl.plot(range(0, len(loss_episode)), np.asarray(loss_episode), label=f'loss')
     for i in range(len(agents) + 1):
+
         if i == len(agents):
+            # loss_episode = calcular_promedio_movil(loss_episode, ventana, mode)
             axl[i].set_title(f'Total loss')
             axl[i].plot(range(0, len(loss_episode)), np.asarray(loss_episode), label='total_rew')
             axl[i].legend(loc='best')
         else:
+            # loss_episode_ag[agents[i]] = calcular_promedio_movil(loss_episode_ag[agents[i]], ventana, mode)
             axl[i].set_title(f'Loss - {agents[i]}')
-            axl[i].plot(range(0, len(loss_episode_ag[agents[i]])), np.asarray(loss_episode_ag[agents[i]]), label=f'loss_{agents[i]}')
+            axl[i].plot(range(0, len(loss_episode_ag[agents[i]])), np.asarray(loss_episode_ag[agents[i]]), label=f'{agents[i]}')
             axl[i].legend(loc='best')
 
 
@@ -266,12 +269,17 @@ if mode == 'train':
     # axv1 = axv.twinx()
     # axv2 = axv.twinx()
     axv[0].plot(range(0, len(ep["v_mean"])), np.asarray(ep["v_mean"]), label='v_mean')
-    axv[1].plot(range(0, len(ep["q_total"])), np.asarray(ep["q_total"]), label='q_total', color='green')
+    axv[1].plot(range(0, len(ep["q_gen_total"])), np.asarray(ep["q_gen_total"]), label='q_gen_total', color='green')
     axv[2].plot(range(0, len(ep["line_loading"])), np.asarray(ep["line_loading"]), label='line_loading', color='red')
     axv[0].legend(loc='best')
     axv[1].legend(loc='best')
     axv[2].legend(loc='best')
     figv.show()
+
+    axp.set_title('percentage_of_v_out_of_control')
+    axp.plot(range(0, len(ep["percentage_of_v_out_of_control"])), np.asarray(ep["percentage_of_v_out_of_control"]), label='v_out_con')
+    axp.legend(loc='best')
+    figp.show()
 
     # ------ evaluación ------
 elif mode == 'eval':
@@ -288,7 +296,7 @@ elif mode == 'eval':
     agents = [f'agent_zone_{i + 1}' for i in range(cantidad_agentes)]
     # figre, axre = plt.subplots(figsize=(12, 6))
     figve, axve = plt.subplots(3, 1, figsize=(12, 6))
-    # figppe, axppe = plt.subplots(figsize=(12, 6))
+    figppe, axppe = plt.subplots(figsize=(12, 6))
     # figpce, axpce = plt.subplots(figsize=(12, 6))
 
     # axre.set_title(f'{algoritmo} episode reward')
@@ -339,3 +347,9 @@ elif mode == 'eval':
     axve[1].legend(loc='best')
     axve[2].legend(loc='best')
     figve.show()
+
+    axppe.set_title('percentage_of_v_out_of_control')
+    axppe.plot(time_labels, np.asarray(ep["percentage_of_v_out_of_control"]), label='v_out_con')
+    axppe.set_xticks(tick_positions)
+    axppe.legend(loc='best')
+    figppe.show()

@@ -238,6 +238,10 @@ class RLlibVoltageControl(MultiAgentEnv):
         # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.log_path = f"results/physical_log.csv"
 
+        # self.log_path = os.path.join(
+        #     os.path.dirname(os.path.abspath(__file__)),
+        #     "results/physical_log.csv"
+        # )
     def reset(self):
         # Escribir a CSV solo al final del episodio
         if self.episode_buffer:
@@ -298,6 +302,7 @@ class RLlibVoltageControl(MultiAgentEnv):
             "p_gen_total": float(self.env.powergrid.res_sgen["p_mw"].sum()),
             "q_gen_total": float(self.env.powergrid.res_sgen["q_mvar"].sum()),
             "line_loading": float(self.env.powergrid.res_line["loading_percent"].mean()),
+            "percentage_of_v_out_of_control": float(info["percentage_of_v_out_of_control"].mean()),
         })
         return obs, rewards, dones, {}
 
