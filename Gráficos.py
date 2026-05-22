@@ -46,8 +46,11 @@ device = 'oficina'
 mode = 'train'
 
 train_path = 'MAPPOTrainer_voltage_case33_3min_final_aa900_00000_0_2026-05-19_09-02-53'
-# 'MAPPOTrainer_voltage_case33_3min_final_f66a3_00000_0_2026-05-18_08-23-15'  con line_losses
-# 'MAPPOTrainer_voltage_case33_3min_final_aa900_00000_0_2026-05-19_09-02-53' con q_losses
+# 'MAPPOTrainer_voltage_case33_3min_final_f66a3_00000_0_2026-05-18_08-23-15' physical_log20260518_082343 con line_losses
+# 'MAPPOTrainer_voltage_case33_3min_final_aa900_00000_0_2026-05-19_09-02-53' physical_log20260519_090314 con q_losses
+# rewards escalados
+# 'MAPPOTrainer_voltage_case33_3min_final_301f6_00000_0_2026-05-20_11-57-14' con q_losses
+# 'MAPPOTrainer_voltage_case33_3min_final_8b089_00000_0_2026-05-21_08-38-10' con line_losses
 
 eval_path = 'MAPPOTrainer_voltage_case33_3min_final_00211_00000_0_2026-05-12_11-36-45'
 cantidad_agentes = 4
