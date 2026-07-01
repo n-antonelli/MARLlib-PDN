@@ -27,6 +27,7 @@ from ray.rllib.utils.framework import try_import_tf, try_import_torch
 from marllib.marl.algos.scripts import POlICY_REGISTRY
 from marllib.marl.common import recursive_dict_update, dict_update
 from marllib.envs.base_env.voltage import PowerGridCallbacks
+import os
 
 torch, nn = try_import_torch()
 
@@ -63,6 +64,8 @@ def restore_config_update(exp_info, run_config, stop_config):
 
 
 def run_cc(exp_info, env, model, stop=None):
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ['RAY_DISABLE_MEMORY_MONITOR'] = '1'
     ray.init(local_mode=exp_info["local_mode"], num_gpus=exp_info["num_gpus"], object_store_memory= 2 * 1024**3,
              _memory= 1 * 1024**3)
 

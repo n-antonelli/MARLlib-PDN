@@ -232,16 +232,16 @@ class RLlibVoltageControl(MultiAgentEnv):
         env_config["map_name"] = net_topology
         self.env_config = env_config
         # self.physical_data = {}
+
         self.episode_buffer = []
         self.episode_count = 0
-        os.makedirs("results", exist_ok=True)
-        # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.log_path = f"results/physical_log.csv"
+        carpeta_resultados = "C:/PDN_runs/Pruebas/results"
+        os.makedirs(carpeta_resultados, exist_ok=True)
+        # os.makedirs("results", exist_ok=True)
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
+        self.log_path = os.path.join(carpeta_resultados, f"physical_log_{timestamp}.csv")  #f"log_worker_{os.getpid()}.csv")
+        # self.log_path = f"results/physical_log.csv"
 
-        # self.log_path = os.path.join(
-        #     os.path.dirname(os.path.abspath(__file__)),
-        #     "results/physical_log.csv"
-        # )
     def reset(self):
         # Escribir a CSV solo al final del episodio
         if self.episode_buffer:

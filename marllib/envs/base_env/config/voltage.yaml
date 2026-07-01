@@ -27,8 +27,8 @@ env_args:
     "voltage_barrier_type": "l1" # "l1", "l2", "bowl", "courant_beltrami", "bump"
     "voltage_weight": 1.0
     "main_weight": 0.8
-    "q_weight": null
-    "line_weight": 0.1
+    "q_weight": 0.1
+    "line_weight": null
     "dq_dv_weight": null
     "history": 1
     "pv_scale": 1.0
@@ -44,10 +44,10 @@ env_args:
     "reset_action": True
     "seed": 111
     "local_mode": True
-    "num_gpus": 0
-    "rollout_fragment_length": 80
-    "num_workers": 1
-    "num_envs_per_worker": 1
+    "num_gpus": 1
+    "rollout_fragment_length": 200
+    "num_workers": 3
+    "num_envs_per_worker": 4
     "share_policy": 'individual'
     "checkpoint_freq": 100
     "num_to_keep": 2

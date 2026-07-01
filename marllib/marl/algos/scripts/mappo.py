@@ -112,7 +112,7 @@ def run_mappo(model: Any, exp: Dict, run: Dict, env: Dict,
     model_path = restore_model(restore, exp)
 
     results = tune.run(MAPPOTrainer,
-                       name=RUNNING_NAME,
+                       name='Pruebas',  # RUNNING_NAME,
                        checkpoint_at_end=exp['checkpoint_end'],
                        checkpoint_freq=exp['checkpoint_freq'],
                        keep_checkpoints_num=2,
@@ -120,6 +120,7 @@ def run_mappo(model: Any, exp: Dict, run: Dict, env: Dict,
                        stop=stop,
                        config=config,
                        verbose=1,
+                       reuse_actors=True,  # Reutilizar actores
                        progress_reporter=CLIReporter(metric_columns={
                                 "training_iteration": "iter",
                                 "timesteps_total": "ts",

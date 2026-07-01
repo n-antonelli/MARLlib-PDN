@@ -24,17 +24,22 @@
 
 local_mode: False # True for debug mode only, False para entrenar porque sino consume mucha ram
 share_policy: "individual" #  individual(separate) / group(division) / all(share)
-evaluation_interval: 50 # evaluate model every 10 training iterations
+evaluation_interval: 99999 #50 # evaluate model every 10 training iterations
 framework: "torch"
-num_workers: 1 # thread number
-num_gpus: 0 # gpu to use
+num_workers: 3 # thread number
+num_gpus: 1 # gpu to use
 num_cpus_per_worker: 1 # cpu allocate to each worker
 num_gpus_per_worker: 0 # gpu allocate to each worker
+max_num_worker_restarts: 5     # Si un worker muere, Ray lo reinicia hasta 5 veces
+disable_env_checking: True     # Evita chequeos redundantes que sumen tiempo
 checkpoint_freq: 100 # save model every 100 training iterations
 checkpoint_end: True # save model at the end of the exp
-restore_path: {"model_path": "", "params_path": ""} # load model and params path: 1. resume exp 2. rendering policy
+restore_path: {
+  "model_path": '', #'C:/results_PDN/exp_results/ippo_mlp_case33_3min_final/IPPOTrainer_voltage_case33_3min_final_2e14e_00000_0_2026-06-26_10-37-31/checkpoint_000100/checkpoint-100',
+  "params_path": '', #'C:/results_PDN/exp_results/ippo_mlp_case33_3min_final/IPPOTrainer_voltage_case33_3min_final_2e14e_00000_0_2026-06-26_10-37-31/params.json'
+} # load model and params path: 1. resume exp 2. rendering policy
 stop_iters: 9999999 # stop training at this iteration
 stop_timesteps: 2000000 # stop training at this timesteps
 stop_reward: 999999 # stop training at this reward
 seed: 111 # ray seed
-local_dir: "" #  all results placed C:\Users\Usuario\Documents\Programas\MARLlib-PDN\results
+local_dir: "C:/PDN_runs" #  all results placed C:\Users\Usuario\Documents\Programas\MARLlib-PDN\results

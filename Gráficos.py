@@ -45,20 +45,26 @@ dirección = {
 device = 'oficina'
 mode = 'train'
 
-train_path = 'MAPPOTrainer_voltage_case33_3min_final_aa900_00000_0_2026-05-19_09-02-53'
-# 'MAPPOTrainer_voltage_case33_3min_final_f66a3_00000_0_2026-05-18_08-23-15' physical_log20260518_082343 con line_losses
-# 'MAPPOTrainer_voltage_case33_3min_final_aa900_00000_0_2026-05-19_09-02-53' physical_log20260519_090314 con q_losses
+train_path = 'MAPPOTrainer_voltage_case33_3min_final_732d2_00000_0_2026-07-01_10-40-40'
+# line_losses
+# 'MAPPOTrainer_voltage_case33_3min_final_f66a3_00000_0_2026-05-18_08-23-15' physical_log20260518_082343
+# q_losses
+# 'MAPPOTrainer_voltage_case33_3min_final_aa900_00000_0_2026-05-19_09-02-53' physical_log20260519_090314
 # rewards escalados
-# 'MAPPOTrainer_voltage_case33_3min_final_301f6_00000_0_2026-05-20_11-57-14' con q_losses
-# 'MAPPOTrainer_voltage_case33_3min_final_8b089_00000_0_2026-05-21_08-38-10' con line_losses
+# line_losses
+# 'MAPPOTrainer_voltage_case33_3min_final_8b089_00000_0_2026-05-21_08-38-10'
+# 'IPPOTrainer_voltage_case33_3min_final_f1633_00000_0_2026-05-26_09-03-44'
+# q_losses
+# 'MAPPOTrainer_voltage_case33_3min_final_301f6_00000_0_2026-05-20_11-57-14'
+# 'IPPOTrainer_voltage_case33_3min_final_c6216_00000_0_2026-05-28_08-38-40'
 
 eval_path = 'MAPPOTrainer_voltage_case33_3min_final_00211_00000_0_2026-05-12_11-36-45'
 cantidad_agentes = 4
 
 if device == 'oficina':
-    url = "C:\\Users\\Usuario\\Documents\\Programas\\MARLlib-PDN"
-else:
-    url = 'C:\\Users\\Nicolas\\Documents\\UNSL\\Programas\\MARLlib-PDN'
+    url = "C:\\PDN_runs\\Pruebas"
+# else:
+#     url = 'C:\\Users\\Nicolas\\Documents\\UNSL\\Programas\\MARLlib-PDN'
 
 steps = np.arange(480)
 time_index = pd.date_range(start="00:00", periods=480, freq="3min")
@@ -94,14 +100,14 @@ def calcular_promedio_movil(datos, ventana, mode):
 
 if mode == 'train':
     with open(f'{url}'
-              f'\\examples\\exp_results\\mappo_mlp_case33_3min_final'
               f'\\{train_path}'
               '\\result.json',
               'r') as file:
         train_data = []
         for episode in file:
             train_data.append(json.loads(episode))
-    df = pd.read_csv(f'{url}\\examples\\exp_results\\mappo_mlp_case33_3min_final\\{train_path}\\results\\physical_log20260519_090314.csv')
+    # df = pd.read_csv(f'{url}\\examples\\exp_results\\mappo_mlp_case33_3min_final\\{train_path}\\results\\physical_log.csv')
+    df = pd.read_csv(f'C:\\PDN_runs\\Pruebas\\results\\physical_log_2026-07-01_10-40-59.csv', error_bad_lines=False, warn_bad_lines=False,)
 
     agents = train_data[0]['config']['model']['custom_model_config']['policy_mapping_info']['case33_3min_final']['team_prefix']
     agents = [f'agent_zone_{i+1}' for i in range(cantidad_agentes)]

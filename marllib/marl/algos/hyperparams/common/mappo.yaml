@@ -30,9 +30,9 @@ algo_args:
   lambda: 0.95
   # Entrenamiento
   lr: 0.00005  # 0.0001
-  "lr_schedule": [
-      [0, 0.0001],          # inicio
-      [150000, 0.00005],    # mitad del entrenamiento
+  lr_schedule: [
+      [0, 0.00005],         # inicio
+      [150000, 0.00007],    # mitad del entrenamiento
       [2000000, 0.00001],   # final
   ]
   gamma: 0.995  # 0.98

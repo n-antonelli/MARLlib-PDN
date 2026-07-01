@@ -28,13 +28,18 @@ from ray.rllib.policy.policy import PolicySpec
 from marllib.marl.algos.scripts import POlICY_REGISTRY
 from marllib.marl.common import recursive_dict_update, dict_update
 from marllib.marl.algos.run_cc import restore_config_update
+import os
 
 tf1, tf, tfv = try_import_tf()
 torch, nn = try_import_torch()
 
 
 def run_il(exp_info, env, model, stop=None):
-    ray.init(local_mode=exp_info["local_mode"], num_gpus=exp_info["num_gpus"])
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ['RAY_DISABLE_MEMORY_MONITOR'] = '1'
+    ray.init(local_mode=exp_info["local_mode"], num_gpus=exp_info["num_gpus"], object_store_memory= 2 * 1024**3,
+             _memory= 1 * 1024**3,
+             )
 
     ########################
     ### environment info ###
@@ -105,14 +110,50 @@ def run_il(exp_info, env, model, stop=None):
     elif exp_info["share_policy"] == "individual":
         if not policy_mapping_info["one_agent_one_policy"]:
             raise ValueError("in {}, agent number too large, we disable no sharing function".format(map_name))
+        ###########
+        # policies = {
+        #     "policy_{}".format(i): (None, env_info["space_obs"], env_info["space_act"], {}) for i in
+        #     range(env_info["num_agents"])
+        # }
+        # policy_ids = list(policies.keys())
+        # policy_mapping_fn = tune.function(
+        #     lambda agent_id: policy_ids[agent_name_ls.index(agent_id)])
 
-        policies = {
-            "policy_{}".format(i): (None, env_info["space_obs"], env_info["space_act"], {}) for i in
-            range(env_info["num_agents"])
+        encoder_layer = {
+            "agent_zone_1": "52-52",
+            "agent_zone_2": "18-18",
+            "agent_zone_3": "14-14",
+            "agent_zone_4": "36-36",
+            # "agent_pv_1": "1-1",
+            # "agent_pv_2": "1-1",
         }
+        policies = {}
+        name = env_info['agent_name_ls'][0]
+        space_size = env_info["space_obs"].spaces[name]['state'].shape[0]
+        for agent in env_info["space_obs"].spaces:
+            policies[f"pol_{agent}"] = (None, env_info["space_obs"].spaces[agent], env_info["space_act"].spaces[agent],
+                                        {"model": {"custom_model": "Centralized_Critic_Model",
+                                                   "custom_model_config": {"encode_layer": encoder_layer[agent], "num_agents": 4, "opp_action_in_cc": False,
+                                                                           "global_state_flag": True,
+                                                                           "global_state_dim": space_size,
+                                                                           }}})
+
         policy_ids = list(policies.keys())
-        policy_mapping_fn = tune.function(
-            lambda agent_id: policy_ids[agent_name_ls.index(agent_id)])
+
+        def policy_mapping_fn(agent_id, episode, worker, **kwargs):  # def policy_mapping_fn(agent_id, **kwargs):
+            if agent_id == "agent_zone_1":
+                return "pol_agent_zone_1"
+            elif agent_id == "agent_zone_2":
+                return "pol_agent_zone_2"
+            elif agent_id == "agent_zone_3":
+                return "pol_agent_zone_3"
+            elif agent_id == "agent_zone_4":
+                return "pol_agent_zone_4"
+            elif agent_id == "agent_pv_1":
+                return "pol_agent_pv_1"
+            else:
+                print(f"no existe el agente {agent_id}")
+        ###########
 
     else:
         raise ValueError("wrong share_policy {}".format(exp_info["share_policy"]))

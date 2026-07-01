@@ -39,7 +39,9 @@ from ma_gym.envs.switch import Switch
 from marllib import marl
 from marllib.envs.base_env import ENV_REGISTRY
 import time
+import os
 
+# os.environ["TORCH_CUDA_ARCH_LIST"] = "12.0"
 mode = 'train'  # 'eval'/'train'
 num_chec = 600
 path = "MAPPOTrainer_voltage_case33_3min_final_33bb4_00000_0_2026-05-11_12-36-39"
@@ -141,7 +143,8 @@ if __name__ == '__main__':
     algoritmo = "mappo"
     eleccion = {"mappo": marl.algos.mappo,
                 "ippo": marl.algos.ippo,
-                "vdppo": marl.algos.vdppo
+                "vdppo": marl.algos.vdppo,
+                "maddpg": marl.algos.maddpg
                 }
     if mode == 'train':
         # pick algorithms
@@ -155,6 +158,9 @@ if __name__ == '__main__':
     elif mode == 'eval':
         # pick algorithms
         algo = eleccion[algoritmo](hyperparam_source="test")
+        # cargar pesos del modelo directamente
+        # checkpoint_file = "C:/Users/Usuario/Documents/Programas/MARLlib-PDN/examples/exp_results/ippo_mlp_case33_3min_final/.../checkpoint_001000/checkpoint-1000"
+        # algo.trainer.import_model_weights_from_pytorch(checkpoint_file)
         # customize model
         model = marl.build_model(env, algo, {"core_arch": "mlp"})  # , "encode_layer": "128-128"})
         print(env)

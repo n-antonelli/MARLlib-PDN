@@ -54,7 +54,7 @@ def run_ippo(model: Any, exp: Dict, run: Dict, env: Dict,
     make sure sgd_minibatch_size > max_seq_len
     """
     ModelCatalog.register_custom_model(
-        "Base_Model", model)
+        "Centralized_Critic_Model", model)
 
     _param = AlgVar(exp)
 
@@ -65,6 +65,8 @@ def run_ippo(model: Any, exp: Dict, run: Dict, env: Dict,
     episode_limit = env["episode_limit"]
     while sgd_minibatch_size < episode_limit:
         sgd_minibatch_size *= 2
+
+    train_batch_size = 2400 # 3 (num_worker) * 4 (num_envs_per_worker) \ 200 (rollout_fragment_length)
 
     batch_mode = _param["batch_mode"]
     lr = _param["lr"]
@@ -80,9 +82,10 @@ def run_ippo(model: Any, exp: Dict, run: Dict, env: Dict,
     back_up_config.pop("algo_args")  # clean for grid_search
 
     config = {
+        "observation_filter": "MeanStdFilter",
         "batch_mode": batch_mode,
-        "train_batch_size": train_batch_size,
-        "sgd_minibatch_size": sgd_minibatch_size,
+        "train_batch_size": train_batch_size,  # Para GPU train_batch_size,
+        "sgd_minibatch_size": 1024,  # Para GPU sgd_minibatch_size,
         "lr": lr if restore is None else 1e-10,
         "entropy_coeff": entropy_coeff,
         "num_sgd_iter": num_sgd_iter,
@@ -92,9 +95,10 @@ def run_ippo(model: Any, exp: Dict, run: Dict, env: Dict,
         "vf_loss_coeff": vf_loss_coeff,
         "kl_coeff": kl_coeff,
         "vf_clip_param": vf_clip_param,
+        # "evaluation_num_workers": 0,
+        "ignore_worker_failures": True,
         "model": {
-            "custom_model": "Base_Model",
-            "max_seq_len": episode_limit,
+            "custom_model": "Centralized_Critic_Model",
             "custom_model_config": back_up_config,
         },
     }
@@ -108,14 +112,23 @@ def run_ippo(model: Any, exp: Dict, run: Dict, env: Dict,
     model_path = restore_model(restore, exp)
 
     results = tune.run(IPPOTrainer,
-                       name=RUNNING_NAME,
+                       name='Pruebas',  # RUNNING_NAME,
                        checkpoint_at_end=exp['checkpoint_end'],
                        checkpoint_freq=exp['checkpoint_freq'],
+                       keep_checkpoints_num=2,
                        restore=model_path,
                        stop=stop,
                        config=config,
                        verbose=1,
-                       progress_reporter=CLIReporter(),
+                       reuse_actors=True,  # Reutilizar actores
+                       progress_reporter=CLIReporter(metric_columns={
+                           "training_iteration": "iter",
+                           "timesteps_total": "ts",
+                           "episode_reward_mean": "reward",
+                           "mean_loss": "loss",
+                           # "custom_metrics/vvio": "Viol V",
+                       },
+                           max_report_frequency=200, ),
                        local_dir=available_local_dir if exp["local_dir"] == "" else exp["local_dir"])
 
     return results
