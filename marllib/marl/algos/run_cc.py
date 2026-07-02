@@ -37,24 +37,21 @@ def restore_config_update(exp_info, run_config, stop_config):
         restore_config = None
     else:
         restore_config = exp_info['restore_path']
-        render_config = {
-            "evaluation_interval": 1,
-            "evaluation_num_episodes": 2,
-            "evaluation_num_workers": 1,
-            "evaluation_config": {
-                "record_env": False,
-                "render_env": True,
-                "explore": False,
-            },
-            # "evaluation_duration": 5,
-
-        }
         if 'render' in exp_info['restore_path']:
-
+            render_config = {
+                "evaluation_interval": 1,
+                "evaluation_num_episodes": 100,
+                "evaluation_num_workers": 1,
+                "evaluation_config": {
+                    "record_env": False,
+                    # "render_env": True,
+                    "explore": False,
+                }
+            }
             run_config = recursive_dict_update(run_config, render_config)
 
             render_stop_config = {
-                "training_iteration": 1,
+                "training_iteration": 2,  # 1,
             }
 
             stop_config = recursive_dict_update(stop_config, render_stop_config)

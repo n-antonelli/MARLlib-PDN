@@ -45,7 +45,7 @@ dirección = {
 device = 'oficina'
 mode = 'train'
 
-train_path = 'MAPPOTrainer_voltage_case33_3min_final_732d2_00000_0_2026-07-01_10-40-40'
+train_path = 'MAPPOTrainer_voltage_case33_3min_final_566f0_00000_0_2026-07-01_11-15-39'
 # line_losses
 # 'MAPPOTrainer_voltage_case33_3min_final_f66a3_00000_0_2026-05-18_08-23-15' physical_log20260518_082343
 # q_losses
@@ -107,7 +107,7 @@ if mode == 'train':
         for episode in file:
             train_data.append(json.loads(episode))
     # df = pd.read_csv(f'{url}\\examples\\exp_results\\mappo_mlp_case33_3min_final\\{train_path}\\results\\physical_log.csv')
-    df = pd.read_csv(f'C:\\PDN_runs\\Pruebas\\results\\physical_log_2026-07-01_10-40-59.csv', error_bad_lines=False, warn_bad_lines=False,)
+    df = pd.read_csv(f'C:\\PDN_runs\\Pruebas\\results\\physical_log_2026-07-01_11-15-55_732224.csv', error_bad_lines=False, warn_bad_lines=False,)
 
     agents = train_data[0]['config']['model']['custom_model_config']['policy_mapping_info']['case33_3min_final']['team_prefix']
     agents = [f'agent_zone_{i+1}' for i in range(cantidad_agentes)]

@@ -238,7 +238,7 @@ class RLlibVoltageControl(MultiAgentEnv):
         carpeta_resultados = "C:/PDN_runs/Pruebas/results"
         os.makedirs(carpeta_resultados, exist_ok=True)
         # os.makedirs("results", exist_ok=True)
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         self.log_path = os.path.join(carpeta_resultados, f"physical_log_{timestamp}.csv")  #f"log_worker_{os.getpid()}.csv")
         # self.log_path = f"results/physical_log.csv"
 
