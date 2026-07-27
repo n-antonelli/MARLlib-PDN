@@ -41,6 +41,11 @@ from marllib.envs.base_env import ENV_REGISTRY
 import time
 import os
 import pickle
+import ray.rllib.utils.torch_ops as torch_ops
+import ray.rllib.policy.torch_policy as torch_policy
+import torch
+import tree
+
 
 # os.environ["TORCH_CUDA_ARCH_LIST"] = "12.0"
 mode = 'eval'  # 'eval'/'train'
@@ -138,7 +143,7 @@ if __name__ == '__main__':
     # MPE
     # env = marl.make_env(environment_name="mpe", map_name="simple_spread", force_coop=True)
     # Power Distribution Networks
-    env = marl.make_env(environment_name="voltage", map_name="case33_3min_final")  # case33_3min_final / case141_3min_final / case322_3min_final
+    env = marl.make_env(environment_name="voltage", map_name="case33_3min_final", train_eval = mode)  # case33_3min_final / case141_3min_final / case322_3min_final
 
     ######## algoritmos ########
     algoritmo = "mappo"
@@ -170,46 +175,92 @@ if __name__ == '__main__':
     #                 local_mode=True,
     #                 share_policy="individual",
     #                 checkpoint_end=False)
+    # elif mode == 'eval':
+    #     # # pick algorithms
+    #     algo = eleccion[algoritmo](hyperparam_source="test")
+    #     # # cargar pesos del modelo directamente
+    #     # # checkpoint_file = "C:/Users/Usuario/Documents/Programas/MARLlib-PDN/examples/exp_results/ippo_mlp_case33_3min_final/.../checkpoint_001000/checkpoint-1000"
+    #     # # algo.trainer.import_model_weights_from_pytorch(checkpoint_file)
+    #     # # customize model
+    #     model = marl.build_model(env, algo, {"core_arch": "mlp"})  # , "encode_layer": "128-128"})
+    #     # print(env)
+    #
+    #
+    #     # rendering
+    #     checkpoint_file = f"C:\\PDN_runs\\Pruebas\\{path}\\checkpoint_00{num_chec}\\checkpoint-{num_chec}"
+    #     # print("-> Cargando exclusivamente los pesos de la red neuronal...")
+    #     # # MARLlib suele tener este método directo en su entrenador para mapear los pesos de PyTorch:
+    #     try:
+    #         algo.trainer.import_model_weights_from_pytorch(checkpoint_file)
+    #         print("¡Pesos cargados con éxito!")
+    #     except Exception as e:
+    #         print(f"Intento estándar falló, probando carga directa por estado: {e}")
+    #     print(env)
+    #
+    #     # algo.render(env, model,
+    #     #              stop={"training_iteration": 1},
+    #     #              restore_path={'params_path': f"C:\\PDN_runs\\Pruebas\\{path}\\params.json",
+    #     #                             'model_path': f"C:\\PDN_runs\\Pruebas\\{path}\\checkpoint_00{num_chec}\\checkpoint-{num_chec}",
+    #     #                            'render': True},  # render
+    #     #              local_mode=True,
+    #     #              share_policy="individual",
+    #     #              checkpoint_end=False)
+    #
+    #
+    #     results = algo.fit(
+    #         env,
+    #         model,
+    #         # stop={"training_iteration": 1},  # Obliga a detenerse tras 1 sola pasada
+    #         local_mode=True,
+    #         restore_path={'params_path': f"C:\\PDN_runs\\Pruebas\\{path}\\params.json",
+    #                       'model_path': f"C:\\PDN_runs\\Pruebas\\{path}\\checkpoint_00{num_chec}\\checkpoint-{num_chec}"}
+    #     )
+    #
+    #     # Puedes imprimir los resultados de esa única iteración para sacar los datos de tu evaluación
+    #     # print("Reward de evaluación (1 episodio):", results["episode_reward_mean"])
     elif mode == 'eval':
-        # # pick algorithms
+
+        def mapeo_seguro(x, device=None):
+            def mapping(item):
+                # Si ya es un tensor, lo movemos al dispositivo si es necesario
+                if isinstance(item, torch.Tensor):
+                    return item if device is None else item.to(device)
+
+                arr = np.asarray(item)
+
+                # Condición clave: Dejar pasar el elemento original si NumPy lo detecta como object_
+                if arr.dtype == np.object_:
+                    return item
+
+                # Convertir arreglos numéricos estables
+                tensor = torch.from_numpy(arr)
+                return tensor if device is None else tensor.to(device)
+
+            # Respetamos el recorrido recursivo original de RLlib
+            return tree.map_structure(mapping, x)
+
+
+        # PARCHE CRÍTICO: Sobrescribir en ambos módulos para evitar el problema de referencias locales
+        torch_ops.convert_to_torch_tensor = mapeo_seguro
+        torch_policy.convert_to_torch_tensor = mapeo_seguro
+
+        # El resto de tu código se mantiene igual
         algo = eleccion[algoritmo](hyperparam_source="test")
-        # # cargar pesos del modelo directamente
-        # # checkpoint_file = "C:/Users/Usuario/Documents/Programas/MARLlib-PDN/examples/exp_results/ippo_mlp_case33_3min_final/.../checkpoint_001000/checkpoint-1000"
-        # # algo.trainer.import_model_weights_from_pytorch(checkpoint_file)
-        # # customize model
-        model = marl.build_model(env, algo, {"core_arch": "mlp"})  # , "encode_layer": "128-128"})
-        # print(env)
-
-
-        # rendering
-        checkpoint_file = f"C:\\PDN_runs\\Pruebas\\{path}\\checkpoint_00{num_chec}\\checkpoint-{num_chec}"
-        # print("-> Cargando exclusivamente los pesos de la red neuronal...")
-        # # MARLlib suele tener este método directo en su entrenador para mapear los pesos de PyTorch:
-        try:
-            algo.trainer.import_model_weights_from_pytorch(checkpoint_file)
-            print("¡Pesos cargados con éxito!")
-        except Exception as e:
-            print(f"Intento estándar falló, probando carga directa por estado: {e}")
+        model = marl.build_model(env, algo, {"core_arch": "mlp"})
         print(env)
 
+        # Evaluación pura
         # algo.render(env, model,
-        #              stop={"training_iteration": 1},
-        #              restore_path={'params_path': f"C:\\PDN_runs\\Pruebas\\{path}\\params.json",
-        #                             'model_path': f"C:\\PDN_runs\\Pruebas\\{path}\\checkpoint_00{num_chec}\\checkpoint-{num_chec}",
-        #                            'render': True},  # render
-        #              local_mode=True,
-        #              share_policy="individual",
-        #              checkpoint_end=False)
-
-
-        results = algo.fit(
-            env,
-            model,
-            # stop={"training_iteration": 1},  # Obliga a detenerse tras 1 sola pasada
-            local_mode=True,
-            restore_path={'params_path': f"C:\\PDN_runs\\Pruebas\\{path}\\params.json",
-                          'model_path': f"C:\\PDN_runs\\Pruebas\\{path}\\checkpoint_00{num_chec}\\checkpoint-{num_chec}"}
-        )
-
-        # Puedes imprimir los resultados de esa única iteración para sacar los datos de tu evaluación
-        # print("Reward de evaluación (1 episodio):", results["episode_reward_mean"])
+        #             restore_path={'params_path': f"C:\\PDN_runs\\Pruebas\\{path}\\params.json",
+        #                           'model_path': f"C:\\PDN_runs\\Pruebas\\{path}\\checkpoint_00{num_chec}\\checkpoint-{num_chec}"},
+        #             local_mode=True,
+        #             share_policy="individual",
+        #             checkpoint_end=False)
+        algo.fit(
+                env,
+                model,
+                # stop={"training_iteration": 1},  # Obliga a detenerse tras 1 sola pasada
+                local_mode=True, num_workers=1,
+                restore_path={'params_path': f"C:\\PDN_runs\\Pruebas\\{path}\\params.json",
+                              'model_path': f"C:\\PDN_runs\\Pruebas\\{path}\\checkpoint_00{num_chec}\\checkpoint-{num_chec}"}
+            )

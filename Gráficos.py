@@ -43,7 +43,7 @@ dirección = {
 }
 
 device = 'oficina'
-mode = 'train'
+mode = 'eval'
 
 train_path = 'MAPPOTrainer_voltage_case33_3min_final_566f0_00000_0_2026-07-01_11-15-39'
 # line_losses
@@ -58,7 +58,7 @@ train_path = 'MAPPOTrainer_voltage_case33_3min_final_566f0_00000_0_2026-07-01_11
 # 'MAPPOTrainer_voltage_case33_3min_final_301f6_00000_0_2026-05-20_11-57-14'
 # 'IPPOTrainer_voltage_case33_3min_final_c6216_00000_0_2026-05-28_08-38-40'
 
-eval_path = 'MAPPOTrainer_voltage_case33_3min_final_00211_00000_0_2026-05-12_11-36-45'
+eval_path = 'MAPPOTrainer_voltage_case33_3min_final_83239_00000_0_2026-07-27_11-36-11'
 cantidad_agentes = 4
 
 if device == 'oficina':
@@ -292,51 +292,21 @@ if mode == 'train':
 
     # ------ evaluación ------
 elif mode == 'eval':
-    # with open(f'{url}'
-    #           f'\\examples\\exp_results\\{algoritmo}_mlp_PGW'
-    #           f'\\{eval_path}'
-    #           '\\eval_data1.json',
-    #           'r') as file:
-    #     eval_data = []
-    #     for episode in file:
-    #         eval_data.append(json.loads(episode))
-    df = pd.read_csv(f'{url}\\examples\\exp_results\\mappo_mlp_case33_3min_final\\{eval_path}\\results\\physical_log.csv')
+    with open(f'{url}'
+              f'\\{eval_path}'
+              '\\result.json',
+              'r') as file:
+        eval_data = []
+        for episode in file:
+            eval_data.append(json.loads(episode))
+    df = pd.read_csv(f'C:\\PDN_runs\\Pruebas\\results\\physical_log_2026-07-27_11-36-17.csv')
     # agents = eval_data[0]["rewards"].keys()
+    # agents = [f'agent_zone_{i + 1}' for i in range(cantidad_agentes)]
     agents = [f'agent_zone_{i + 1}' for i in range(cantidad_agentes)]
     # figre, axre = plt.subplots(figsize=(12, 6))
     figve, axve = plt.subplots(3, 1, figsize=(12, 6))
     figppe, axppe = plt.subplots(figsize=(12, 6))
-    # figpce, axpce = plt.subplots(figsize=(12, 6))
-
-    # axre.set_title(f'{algoritmo} episode reward')
-    # for agent in agents:
-    #     axre.plot(range(0, len(eval_data[0]["rewards"][agent])), np.asarray(eval_data[0]["rewards"][agent]), label=f'reward {agent}')
-    # axre.legend()
-    # figre.show()
-    #
-    # axve.set_title(f'{algoritmo} episode vvio')
-    # axve.plot(range(0, len(eval_data[0]["vvio"])), np.asarray(eval_data[0]["vvio"]), label=f'vvio')
-    # figve.show()
-    #
-    # power_p = {}
-    # for agent in agents:
-    #     power_p[agent] = calcular_promedio_movil(eval_data[0]["power_p"][agent], ventana)
-    # axppe.set_title(f'{algoritmo} episode power p')
-    # for agent in agents:
-    #     axppe.plot(range(0, len(power_p[agent])), np.asarray(power_p[agent]), label=f'power p {agent}')
-    # axppe.legend()
-    # figppe.show()
-    #
-    # components = eval_data[0]["p_consumed"].keys()
-    # power_p_cons = {}
-    # axpce.set_title(f'{algoritmo} episode p consumed')
-    # for comp in components:
-    #     power_p_cons[comp] = calcular_promedio_movil(eval_data[0]["p_consumed"][comp], ventana)
-    #     if 'building' in comp: # Si solo quiero graficar el consumo del edificio
-    #         if 'ff' not in comp:
-    #             axpce.plot(range(0, len(power_p_cons[comp])), np.asarray(power_p_cons[comp]), label=comp)
-    # axpce.legend()
-    # figpce.show()
+    figpce, axpce = plt.subplots(figsize=(12, 6))
 
     # Por step dentro de un episodio específico
     ep = df[df["episode"] == 1]  # 1 para summer, 0  para winter
@@ -345,9 +315,11 @@ elif mode == 'eval':
     axve[0].set_title("Voltaje medio por episodio")
     axve[1].set_title("Potencia reactiva generada")
     axve[2].set_title("Porcentaje potencia perdida de línea")
-    axve[0].plot(time_labels, np.asarray(ep["v_mean"]), label='v_mean')
-    axve[1].plot(time_labels, np.asarray(ep["q_gen_total"]), label='q_gen_total', color='green')
-    axve[2].plot(time_labels, np.asarray(ep["line_loading"]), label='line_loading', color='red')
+    values = np.asarray(ep["v_mean"].values)
+    largo = len(np.asarray(ep["v_mean"].values))
+    axve[0].plot(range(0, len(np.asarray(ep["v_mean"]))), np.asarray(ep["v_mean"].values), label='v_mean')
+    axve[1].plot(range(0, len(np.asarray(ep["q_gen_total"]))), np.asarray(ep["q_gen_total"]), label='q_gen_total', color='green')
+    axve[2].plot(range(0, len(np.asarray(ep["line_loading"]))), np.asarray(ep["line_loading"]), label='line_loading', color='red')
     axve[0].set_xticks([])
     axve[1].set_xticks([])
     axve[2].set_xticks(tick_positions)
@@ -358,7 +330,7 @@ elif mode == 'eval':
     figve.show()
 
     axppe.set_title('percentage_of_v_out_of_control')
-    axppe.plot(time_labels, np.asarray(ep["percentage_of_v_out_of_control"]), label='v_out_con')
+    axppe.plot(range(0, len(np.asarray(ep["percentage_of_v_out_of_control"]))), np.asarray(ep["percentage_of_v_out_of_control"]), label='v_out_con')
     axppe.set_xticks(tick_positions)
     axppe.legend(loc='best')
     figppe.show()

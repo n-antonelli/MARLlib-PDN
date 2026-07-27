@@ -74,6 +74,7 @@ def make_env(
         map_name: str,
         force_coop: bool = False,
         abs_path: str = "",
+        train_eval: str = "",
         **env_params
 ) -> Tuple[MultiAgentEnv, Dict]:
     """
@@ -143,12 +144,17 @@ def make_env(
 
     env_reg_name = env_config["env"] + "_" + env_config["env_args"]["map_name"]
 
+    # agregar mode al env_config
+    env_config["env_args"]["train_eval"] = train_eval
+
     if env_config["force_coop"]:
         register_env(env_reg_name, lambda _: COOP_ENV_REGISTRY[env_config["env"]](env_config["env_args"]))
         env = COOP_ENV_REGISTRY[env_config["env"]](env_config["env_args"])
     else:
         register_env(env_reg_name, lambda _: ENV_REGISTRY[env_config["env"]](env_config["env_args"]))
         env = ENV_REGISTRY[env_config["env"]](env_config["env_args"])
+
+
 
     return env, env_config
 

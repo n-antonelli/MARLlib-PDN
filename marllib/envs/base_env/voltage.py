@@ -239,8 +239,14 @@ class RLlibVoltageControl(MultiAgentEnv):
         os.makedirs(carpeta_resultados, exist_ok=True)
         # os.makedirs("results", exist_ok=True)
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        self.log_path = os.path.join(carpeta_resultados, f"physical_log_{timestamp}.csv")  #f"log_worker_{os.getpid()}.csv")
+        self.log_path = os.path.join(carpeta_resultados, f"physical_log_{timestamp}.csv")  #f"log_worker_{os.getpid()}.csv") / f"physical_log_{timestamp}.csv"
         # self.log_path = f"results/physical_log.csv"
+        if self.env_config["train_eval"] == "eval":
+            self.eval_data = {}
+            self.eval_data['rewards'] = []
+            self.eval_data['vvio'] = []
+            self.eval_data['power_p'] = []
+            self.eval_data['voltage'] = []
 
     def reset(self):
         # Escribir a CSV solo al final del episodio
@@ -250,6 +256,9 @@ class RLlibVoltageControl(MultiAgentEnv):
             df.to_csv(self.log_path, mode="a", header=write_header, index=False)
             self.episode_buffer = []
             self.episode_count += 1
+            if self.env_config["train_eval"] == "eval":
+                self.eval_data = df
+
         o, s = self.env.reset()
         obs = {}
         for index, agent in enumerate(self.agents):

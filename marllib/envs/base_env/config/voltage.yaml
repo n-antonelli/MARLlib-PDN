@@ -51,6 +51,7 @@ env_args:
     "share_policy": 'individual'
     "checkpoint_freq": 100
     "num_to_keep": 2
+#    "train_eval":'eval',
 
 mask_flag: False
 global_state_flag: True
