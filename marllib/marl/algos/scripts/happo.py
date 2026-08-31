@@ -33,6 +33,7 @@ from ray.rllib.models import ModelCatalog
 import json
 from typing import Any, Dict
 from ray.tune.analysis import ExperimentAnalysis
+from datetime import datetime
 
 
 def run_happo(model: Any, exp: Dict, run: Dict, env: Dict,
@@ -61,7 +62,7 @@ def run_happo(model: Any, exp: Dict, run: Dict, env: Dict,
     ModelCatalog.register_custom_model(
         "Centralized_Critic_Model", model)
 
-    train_batch_size = _param["batch_episode"] * env["episode_limit"]
+    train_batch_size = 960 # _param["batch_episode"] * env["episode_limit"]
     if "fixed_batch_timesteps" in exp:
         train_batch_size = exp["fixed_batch_timesteps"]
     sgd_minibatch_size = train_batch_size
@@ -129,20 +130,37 @@ def run_happo(model: Any, exp: Dict, run: Dict, env: Dict,
     map_name = exp["env_args"]["map_name"]
     arch = exp["model_arch_args"]["core_arch"]
     RUNNING_NAME = '_'.join([algorithm, arch, map_name, str(lr), str(critic_lr), TRAIN_MARK.upper(), f'seed-{seed}'])
+    model_path = restore_model(restore, exp)
+    short_map_name = exp["env_args"]["short_map_name"]
+    timestamp = datetime.now().strftime("%Y-%m-%d.%H-%M")
+
+    def custom_dirname_creator(trial):
+        return f"{algorithm}_{short_map_name}_{timestamp}"
 
     model_path = restore_model(restore, exp)
 
     _HAPPOTrainer = HAPPOTrainer(PPO_CONFIG)
 
     results = tune.run(_HAPPOTrainer,
-                       name=RUNNING_NAME,
+                       name='Pruebas',  # RUNNING_NAME,
                        checkpoint_at_end=exp['checkpoint_end'],
                        checkpoint_freq=exp['checkpoint_freq'],
+                       keep_checkpoints_num=2,
                        restore=model_path,
                        stop=stop,
                        config=config,
                        verbose=1,
-                       progress_reporter=CLIReporter(),
-                       local_dir=available_local_dir if exp["local_dir"] == "" else exp["local_dir"])
+                       reuse_actors=True,  # Reutilizar actores
+                       progress_reporter=CLIReporter(metric_columns={
+                           "training_iteration": "iter",
+                           "timesteps_total": "ts",
+                           "episode_reward_mean": "reward",
+                           "mean_loss": "loss",
+                           # "custom_metrics/vvio": "Viol V",
+                       },
+                           max_report_frequency=100, ),
+                       local_dir=available_local_dir if exp["local_dir"] == "" else exp["local_dir"],
+                       trial_dirname_creator=custom_dirname_creator,
+                       )
 
     return results

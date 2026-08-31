@@ -35,8 +35,8 @@ disable_env_checking: True     # Evita chequeos redundantes que sumen tiempo
 checkpoint_freq: 100 # save model every 100 training iterations
 checkpoint_end: True # save model at the end of the exp
 restore_path: {
-  "model_path": '', #'C:/results_PDN/exp_results/ippo_mlp_case33_3min_final/IPPOTrainer_voltage_case33_3min_final_2e14e_00000_0_2026-06-26_10-37-31/checkpoint_000100/checkpoint-100',
-  "params_path": '', #'C:/results_PDN/exp_results/ippo_mlp_case33_3min_final/IPPOTrainer_voltage_case33_3min_final_2e14e_00000_0_2026-06-26_10-37-31/params.json'
+  "model_path": '',
+  "params_path": '',
 } # load model and params path: 1. resume exp 2. rendering policy
 stop_iters: 9999999 # stop training at this iteration
 stop_timesteps: 2000000 # stop training at this timesteps

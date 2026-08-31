@@ -31,6 +31,8 @@ from marllib.marl.algos.scripts.coma import restore_model
 import json
 from typing import Any, Dict
 from ray.tune.analysis import ExperimentAnalysis
+from datetime import datetime
+import os
 
 
 def run_mappo(model: Any, exp: Dict, run: Dict, env: Dict,
@@ -110,6 +112,12 @@ def run_mappo(model: Any, exp: Dict, run: Dict, env: Dict,
     arch = exp["model_arch_args"]["core_arch"]
     RUNNING_NAME = '_'.join([algorithm, arch, map_name])
     model_path = restore_model(restore, exp)
+    short_map_name = exp["env_args"]["short_map_name"]
+    timestamp = datetime.now().strftime("%Y-%m-%d.%H-%M-%S")
+
+    def custom_dirname_creator(trial):
+        return f"{algorithm}_{short_map_name}_{timestamp}"
+
 
     results = tune.run(MAPPOTrainer,
                        name='Pruebas',  # RUNNING_NAME,
@@ -129,6 +137,9 @@ def run_mappo(model: Any, exp: Dict, run: Dict, env: Dict,
                                 # "custom_metrics/vvio": "Viol V",
                             },
                            max_report_frequency=100,),
-                       local_dir=available_local_dir if exp["local_dir"] == "" else exp["local_dir"])
+                       local_dir= available_local_dir if exp["local_dir"] == "" else exp["local_dir"],
+                       trial_dirname_creator= custom_dirname_creator,
+                       )
+
 
     return results

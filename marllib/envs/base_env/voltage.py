@@ -44,7 +44,7 @@ policy_mapping_dict = {
     #     "all_agents_one_policy": True,
     #     "one_agent_one_policy": True,
     # },
-    "case33_3min_final": {
+    "case33_3min": {
         "description": "voltage control custom",
         "team_prefix": team_prefix,
         "all_agents_one_policy": False,
@@ -106,31 +106,32 @@ class PowerGridCallbacks(DefaultCallbacks):
 class RLlibVoltageControl(MultiAgentEnv):
 
     def __init__(self, env_config):
+
         net_topology = env_config.pop("map_name", None)
         # net_topology = env_config.pop("net_topology", None)
         data_path = env_config["data_path"].split("/")
         # net_topology = "case322_3min_final"  # case33_3min_final / case141_3min_final / case322_3min_final
-        data_path[-1] = net_topology
-        env_config["data_path"] = "/".join(data_path)
-
         # set the action range
-        assert net_topology in ['case33_3min_final', 'case141_3min_final',
-                                'case322_3min_final'], f'{net_topology} is not a valid scenario.'
-        if net_topology == 'case33_3min_final':
+        assert net_topology in ['case33_3min', 'case141_3min', 'case322_3min'], f'{net_topology} is not a valid scenario.'
+        if net_topology == 'case33_3min':
             env_config["action_bias"] = 0.0
             env_config["action_scale"] = 0.8
-        elif net_topology == 'case141_3min_final':
+        elif net_topology == 'case141_3min':
             env_config["action_bias"] = 0.0
             env_config["action_scale"] = 0.6
-        elif net_topology == 'case322_3min_final':
+        elif net_topology == 'case322_3min':
             env_config["action_bias"] = 0.0
             env_config["action_scale"] = 0.8
+
+        net_topology_path = net_topology + '_' + env_config["train_eval"]
+        data_path[-1] = net_topology_path
+        env_config["data_path"] = "/".join(data_path)
 
         # define control mode and voltage barrier function
         env_config["mode"] = mode  # distributed-->cada panel tiene un agente / decentralised-->cada zona tiene un agente (puede tener varios paneles/acciones)
         env_config["voltage_barrier_type"] = 'l1'
         env_config["data_path"] = os.path.join(project_root, "marllib\\patch\\dpn\\var_voltage_control\\data", #"marllib/patch/dpn/var_voltage_control/data",
-                                               net_topology)
+                                               net_topology_path)
         self.env = VoltageControl(env_config)
         self.num_agents = self.env.get_num_of_agents()
         ###############
@@ -220,7 +221,6 @@ class RLlibVoltageControl(MultiAgentEnv):
                 dtype=np.float32
             )
 
-
         # # Originales
         # self.action_space = Box(self.env.action_space.low, self.env.action_space.high, shape=(1,))
         # self.observation_space = GymDict({
@@ -235,10 +235,12 @@ class RLlibVoltageControl(MultiAgentEnv):
 
         self.episode_buffer = []
         self.episode_count = 0
+
+
         carpeta_resultados = "C:/PDN_runs/Pruebas/results"
         os.makedirs(carpeta_resultados, exist_ok=True)
         # os.makedirs("results", exist_ok=True)
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        timestamp = datetime.now().strftime("%Y-%m-%d.%H-%M-%S")
         self.log_path = os.path.join(carpeta_resultados, f"physical_log_{timestamp}.csv")  #f"log_worker_{os.getpid()}.csv") / f"physical_log_{timestamp}.csv"
         # self.log_path = f"results/physical_log.csv"
         if self.env_config["train_eval"] == "eval":
@@ -301,17 +303,30 @@ class RLlibVoltageControl(MultiAgentEnv):
         # Acumular datos físicos en memoria
         self.episode_buffer.append({
             "episode": self.episode_count,
-
-            "v_mean": float(self.env.powergrid.res_bus["vm_pu"].mean()),
-            "va_degree": float(self.env.powergrid.res_bus["va_degree"].sum()),
-            # "v_min": float(self.powergrid.res_bus["vm_pu"].min()),
-            # "v_max": float(self.powergrid.res_bus["vm_pu"].max()),
-            "p_line_total": float(self.env.powergrid.res_line["pl_mw"].sum()),
-            "q_line_total": float(self.env.powergrid.res_line["ql_mvar"].sum()),
-            "p_gen_total": float(self.env.powergrid.res_sgen["p_mw"].sum()),
+            # Datos de las líneas
+            "v_mean_bus": float(self.env.powergrid.res_bus["vm_pu"].mean()),
+            "v_min": float(self.env.powergrid.res_bus["vm_pu"].min()),
+            "v_max": float(self.env.powergrid.res_bus["vm_pu"].max()),
+            "va_degree_bus": float(self.env.powergrid.res_bus["va_degree"].mean()),
+            "power_p_bus": float(self.env.powergrid.res_bus["p_mw"].mean()),
+            "power_q_bus": float(self.env.powergrid.res_bus["q_mvar"].mean()),
+            # Datos de las pérdidas en la línea
+            "perd_p_line_total": float(self.env.powergrid.res_line["pl_mw"].sum()),
+            "perd_q_line_total": float(self.env.powergrid.res_line["ql_mvar"].sum()),
+            "line_loading_perc": float(self.env.powergrid.res_line["loading_percent"].mean()),
+            # Datos de la generación fotovoltáica
+            "p_gen_total": float(self.env.powergrid.res_sgen["p_mw"].sum()), # también se puede obtener de sgen
             "q_gen_total": float(self.env.powergrid.res_sgen["q_mvar"].sum()),
-            "line_loading": float(self.env.powergrid.res_line["loading_percent"].mean()),
+            # Custom metrics
+            "average_voltage": float(self.env.powergrid.custom_metrics["average_voltage"]),
+            "total_line_loss": float(self.env.powergrid.custom_metrics["total_line_loss"]),
+            "q_loss": float(self.env.powergrid.custom_metrics["q_loss"]),
+            # Datos de la carga
+            "load_p": float(self.env.powergrid.load["p_mw"].sum()),
+            "load_q": float(self.env.powergrid.load["q_mvar"].sum()),
+            # Extras
             "percentage_of_v_out_of_control": float(info["percentage_of_v_out_of_control"].mean()),
+            "frec": float(self.env.powergrid.f_hz),
         })
         return obs, rewards, dones, {}
 

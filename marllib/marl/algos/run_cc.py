@@ -51,7 +51,7 @@ def restore_config_update(exp_info, run_config, stop_config):
             run_config = recursive_dict_update(run_config, render_config)
 
             render_stop_config = {
-                "training_iteration": 2,  # 1,
+                "training_iteration": 10,  # 1,
             }
 
             stop_config = recursive_dict_update(stop_config, render_stop_config)
@@ -59,6 +59,8 @@ def restore_config_update(exp_info, run_config, stop_config):
 
     return exp_info, run_config, stop_config, restore_config
 
+def custom_dirname_creator(trial):
+    return f"Microred_Case33_{trial.trial_id}"
 
 def run_cc(exp_info, env, model, stop=None):
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -216,6 +218,7 @@ def run_cc(exp_info, env, model, stop=None):
         "evaluation_interval": exp_info["evaluation_interval"],
         "simple_optimizer": False,  # force using better optimizer
         # "callbacks": PowerGridCallbacks,
+        # "trial_dirname_creator": custom_dirname_creator,
     }
 
     stop_config = {
@@ -227,6 +230,7 @@ def run_cc(exp_info, env, model, stop=None):
     stop_config = dict_update(stop_config, stop)
 
     exp_info, run_config, stop_config, restore_config = restore_config_update(exp_info, run_config, stop_config)
+    # exp_info, run_config, stop_config, restore_config = +exp_info, run_config, stop_config, None
 
     ##################
     ### run script ###

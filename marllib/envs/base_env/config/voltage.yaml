@@ -23,20 +23,21 @@
 env: voltage
 
 env_args:
-    "map_name": "case33_3min_final" # 'case33_3min_final', 'case141_3min_final'
-    "voltage_barrier_type": "l1" # "l1", "l2", "bowl", "courant_beltrami", "bump"
-    "voltage_weight": 1.0
-    "main_weight": 0.8
-    "q_weight": 0.1
-    "line_weight": null
-    "dq_dv_weight": null
+    "map_name": "case33_3min" # 'case33_3min', 'case141_3min'
+    "short_map_name": "33_3"
+    "voltage_barrier_type": "bowl" # "l1", "l2", "bowl", "courant_beltrami", "bump"
+    "main_weight": 0.8 # peso para asignar importancia a problemas del bus principal dentro del reward
+    "voltage_weight": 0.85 # peso para asignar importancia a violaciones de tensión dentro del reward
+    "q_weight": 0.1 # peso para asignar importancia a consumo de energía reactiva dentro del reward
+    "dq_dv_weight": 0.05 # peso para asignar importancia a los cambios del consumo de energía reactiva dentro del reward
+    "line_weight": null # peso para asignar importancia a pérdidas en la línea dentro del reward
     "history": 1
     "pv_scale": 1.0
     "demand_scale": 1.0
     "state_space": ["pv", "demand", "reactive", "vm_pu", "va_degree"]
     "v_upper": 1.05
     "v_lower": 0.95
-    "data_path": "/marllib/patch/dpn/var_voltage_control/data/case33_3min_final"
+    "data_path": "/marllib/patch/dpn/var_voltage_control/data/case33_3min"
     "episode_limit": 480  # (24*60) / 3 --> Un día entero con muestras cada 3 minutos - Original: 240 # in time intervals
     "action_scale": null
     "action_bias": null
@@ -51,7 +52,8 @@ env_args:
     "share_policy": 'individual'
     "checkpoint_freq": 100
     "num_to_keep": 2
-#    "train_eval":'eval',
+
+
 
 mask_flag: False
 global_state_flag: True

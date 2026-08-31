@@ -8,8 +8,39 @@ import os
 from collections import namedtuple
 from .pf_res_plot import pf_res_plotly
 from .voltage_barrier.voltage_barrier_backend import VoltageBarrier
+import functools
 
 
+@functools.lru_cache(maxsize=1)
+def load_shared_power_data(data_path, demand_scale):
+    """Carga los datasets una sola vez en memoria y devuelve arreglos NumPy en float32."""
+    pv_df = pd.read_csv(f"{data_path}/pv_active.csv", index_col=None)
+    pv_df.index = pd.to_datetime(pv_df.iloc[:, 0])
+    pv_df.index.name = 'time'
+    pv_df = pv_df.iloc[::1, 1:] * demand_scale
+    p_demand_df = pd.read_csv(f"{data_path}/load_active.csv", index_col=None)
+    p_demand_df.index = pd.to_datetime(p_demand_df.iloc[:, 0])
+    p_demand_df.index.name = 'time'
+    p_demand_df = p_demand_df.iloc[::1, 1:] * demand_scale
+    q_demand_df = pd.read_csv(f"{data_path}/load_reactive.csv", index_col=None)
+    q_demand_df.index = pd.to_datetime(q_demand_df.iloc[:, 0])
+    q_demand_df.index.name = 'time'
+    q_demand_df = q_demand_df.iloc[::1, 1:] * demand_scale
+    # demand_path = os.path.join(self.data_path, 'load_reactive.csv')
+    # demand = pd.read_csv(demand_path, index_col=None)
+    # demand.index = pd.to_datetime(demand.iloc[:, 0])
+    # demand.index.name = 'time'
+    # demand = demand.iloc[::1, 1:] * self.args.demand_scale
+
+    # Precalcular desviaciones estándar escaladas
+    return {
+        "pv_data": pv_df,
+        "p_demand_data": p_demand_df,
+        "q_demand_data": q_demand_df,
+        "pv_std": pv_df.values.std(axis=0) / 100.0,
+        "p_demand_std": p_demand_df.values.std(axis=0) / 100.0,
+        "q_demand_std": q_demand_df.values.std(axis=0) / 100.0,
+    }
 
 
 def convert(dictionary):
@@ -34,6 +65,7 @@ class VoltageControl(MultiAgentEnv):
             next_state = env.get_obs()
             state = next_state
     """
+
     def __init__(self, kwargs):
         """initialisation
         """
@@ -51,11 +83,27 @@ class VoltageControl(MultiAgentEnv):
         
         # load the model of power network
         self.base_powergrid = self._load_network()
-        
+
+        ###############
         # load data
-        self.pv_data = self._load_pv_data()
-        self.active_demand_data = self._load_active_demand_data()
-        self.reactive_demand_data = self._load_reactive_demand_data()
+        # Original
+        # self.pv_data = self._load_pv_data()
+        # self.active_demand_data = self._load_active_demand_data()
+        # self.reactive_demand_data = self._load_reactive_demand_data()
+        # self.pv_std = self.pv_data.values.std(axis=0) / 100.0  # Porcentaje de desviación a escala decimal / per-unit (p.u.)
+        # self.active_demand_std = self.active_demand_data.values.std(axis=0) / 100.0  # Porcentaje de desviación a escala decimal / per-unit (p.u.)
+        # self.reactive_demand_std = self.reactive_demand_data.values.std(axis=0) / 100.0  # Porcentaje de desviación a escala decimal / per-unit (p.u.)
+
+        # Modificación
+        datos = load_shared_power_data(args.data_path, args.demand_scale)
+        self.pv_data = datos["pv_data"]
+        self.active_demand_data = datos["p_demand_data"]
+        self.reactive_demand_data = datos["q_demand_data"]
+        self.pv_std = datos["pv_std"]
+        self.active_demand_std = datos["p_demand_std"]
+        self.reactive_demand_std = datos["q_demand_std"]
+
+        ###############
 
         # define episode and rewards
         self.episode_limit = args.episode_limit
@@ -69,9 +117,6 @@ class VoltageControl(MultiAgentEnv):
         # define constraints and uncertainty
         self.v_upper = getattr(args, "v_upper", 1.05)
         self.v_lower = getattr(args, "v_lower", 0.95)
-        self.active_demand_std = self.active_demand_data.values.std(axis=0) / 100.0  # TODO: Porqué el 100?
-        self.reactive_demand_std = self.reactive_demand_data.values.std(axis=0) / 100.0
-        self.pv_std = self.pv_data.values.std(axis=0) / 100.0
         self._set_reactive_power_boundary()
 
         # define action space and observation space
@@ -103,12 +148,13 @@ class VoltageControl(MultiAgentEnv):
         self.max_v_seen = 1e-6
         self.max_l_seen = 1e-6
         self.max_q_seen = 1e-6
+        self.prev_actions = {}
 
     def reset(self, reset_time=True):
         """reset the env
         """
         # reset the time step, cumulative rewards and obs history
-        self.steps = 1
+        self.steps = 0
         self.sum_rewards = 0
         if self.history > 1:
             self.obs_history = {i: [] for i in range(self.n_agents)}
@@ -120,6 +166,12 @@ class VoltageControl(MultiAgentEnv):
             # reset the time stamp
             if reset_time:
                 self._episode_start_hour = self._select_start_hour()
+                ###########
+                # # Seleccionar día propuesto (aleatorio o secuencial)
+                # proposed_start_day = self._select_start_day()
+                # # Validar e incrementar hasta encontrar un día con datos reales en la BD
+                # self._episode_start_day, self.current_episode_data = self._get_valid_start_day(proposed_start_day)
+                # ###########
                 self._episode_start_day = self._select_start_day()
                 self._episode_start_interval = self._select_start_interval()
             # get one episode of data
@@ -142,6 +194,7 @@ class VoltageControl(MultiAgentEnv):
                 print (f"This is the reactive demand: \n{self.powergrid.load['q_mvar']}")
                 print (f"This is the res_bus: \n{self.powergrid.res_bus}")
                 solvable = False
+        self.prev_actions = {}
 
         return self.get_obs(), self.get_state()
     
@@ -226,16 +279,32 @@ class VoltageControl(MultiAgentEnv):
 
         self.powergrid['custom_metrics'] = custom_metrics
 
-        # set the pv and demand for the next time step
-        self._set_demand_and_pv(add_noise=add_noise)
+        #############
+        # Original
+        #
+        # # set the pv and demand for the next time step
+        # self._set_demand_and_pv(add_noise=add_noise)
+        #
+        # # terminate if episode_limit is reached
+        # self.steps += 1
+        # self.sum_rewards += sum(reward.values())
+        # if self.steps >= self.episode_limit or not solvable:
+        #     terminated = True
+        # else:
+        #     terminated = False
 
-        # terminate if episode_limit is reached
+        # Modificación
+        # Avanzar el contador de pasos al siguiente timestep
         self.steps += 1
         self.sum_rewards += sum(reward.values())
-        if self.steps >= self.episode_limit or not solvable:
-            terminated = True
-        else:
-            terminated = False
+
+        # Verificar condición de término
+        terminated = True if (self.steps >= self.episode_limit or not solvable) else False
+
+        # Cargar la demanda y fotovoltaica para el SIGUIENTE paso (t + 1)
+        if not terminated:
+            self._set_demand_and_pv(add_noise=add_noise)
+
         # if terminated:
         #     print (f"Episode terminated at time: {self.steps} with return: {self.sum_rewards:2.4f}.")
 
@@ -459,21 +528,46 @@ class VoltageControl(MultiAgentEnv):
     def _select_start_hour(self):
         """select start hour for an episode
         """
-        return np.random.choice(24)
+        if self.args.train_eval == 'train':
+            return np.random.choice(24) # comenzar de forma aleatoria para el entrenamiento
+        else:
+            return 0
     
     def _select_start_interval(self):
         """select start interval for an episode
         """
-        return np.random.choice( 60 // self.time_delta )
+        return np.random.choice( 60 // self.time_delta ) # Cantidad de datos por hora
 
     def _select_start_day(self):
         """select start day (date) for an episode
         """
+        # Elige un número al azar entre los 1095 días que hay en el dataset (pv_data)
         pv_data = self.pv_data
         pv_days = (pv_data.index[-1] - pv_data.index[0]).days
-        self.time_delta = (pv_data.index[1] - pv_data.index[0]).seconds // 60
+        self.time_delta = (pv_data.index[1] - pv_data.index[0]).seconds // 60  # delta de minutos
         episode_days = ( self.episode_limit // (24 * (60 // self.time_delta) ) ) + 1  # margin
-        return np.random.choice(pv_days - episode_days)
+        max_valid_day = pv_days - episode_days
+        eval_mode = getattr(self.args, 'eval_season', 'alternate')
+        if getattr(self.args, 'train_eval', 'train') == 'train':
+            return np.random.choice(max_valid_day)
+        summer_months = [12, 1, 2]  # Dic, Ene, Feb
+        winter_months = [6, 7, 8]  # Jun, Jul, Ago
+        if eval_mode == 'alternate':
+            # Alterna entre verano e invierno en cada llamada a reset()
+            if not hasattr(self, '_eval_toggle'):
+                self._eval_toggle = False
+            self._eval_toggle = not self._eval_toggle
+            target_months = summer_months if self._eval_toggle else winter_months
+        elif eval_mode == 'winter':
+            target_months = winter_months
+        else:  # 'summer'
+            target_months = summer_months
+        # Generar el rango de fechas de inicio y filtrar índices
+        start_date = pv_data.index[0]
+        date_range = pd.date_range(start_date, periods=max_valid_day, freq='D')
+        valid_days = np.where(date_range.month.isin(target_months))[0]
+
+        return np.random.choice(valid_days)
 
     def _load_network(self):
         """load network
@@ -518,11 +612,13 @@ class VoltageControl(MultiAgentEnv):
     def _get_episode_pv_history(self):
         """return the pv history in an episode
         """
+        # Toma datos de 480 steps desde la hora de inicio aleatorio
         episode_length = self.episode_limit
         history = self.history
         start = self._episode_start_interval + self._episode_start_hour * (60 // self.time_delta) + self._episode_start_day * 24 * (60 // self.time_delta)
         nr_intervals = episode_length + history + 1  # margin of 1
-        episode_pv_history = self.pv_data[start:start + nr_intervals].values
+        # episode_pv_history = self.pv_data[start:start + nr_intervals].values #Original
+        episode_pv_history = self.pv_data.iloc[start:start + nr_intervals].values
         return episode_pv_history
     
     def _get_episode_active_demand_history(self):
@@ -532,7 +628,8 @@ class VoltageControl(MultiAgentEnv):
         history = self.history
         start = self._episode_start_interval + self._episode_start_hour * (60 // self.time_delta) + self._episode_start_day * 24 * (60 // self.time_delta)
         nr_intervals = episode_length + history + 1  # margin of 1
-        episode_demand_history = self.active_demand_data[start:start + nr_intervals].values
+        # episode_demand_history = self.active_demand_data[start:start + nr_intervals].values #Original
+        episode_demand_history = self.active_demand_data.iloc[start: start + nr_intervals].values
         return episode_demand_history
     
     def _get_episode_reactive_demand_history(self):
@@ -542,7 +639,8 @@ class VoltageControl(MultiAgentEnv):
         history = self.history
         start = self._episode_start_interval + self._episode_start_hour * (60 // self.time_delta) + self._episode_start_day * 24 * (60 // self.time_delta)
         nr_intervals = episode_length + history + 1  # margin of 1
-        episode_demand_history = self.reactive_demand_data[start:start + nr_intervals].values
+        # episode_demand_history = self.reactive_demand_data[start:start + nr_intervals].values #Original
+        episode_demand_history = self.reactive_demand_data.iloc[start : start + nr_intervals].values
         return episode_demand_history
 
     def _get_pv_history(self):
@@ -568,7 +666,8 @@ class VoltageControl(MultiAgentEnv):
 
     def _set_demand_and_pv(self, add_noise=True):
         """optionally update the demand and pv production according to the histories with some i.i.d. gaussian noise
-        """ 
+        """
+        # Agrega ruido a la demanda de potencia activa, reactiva y generación de potencia activa del pv
         pv = copy.copy(self._get_pv_history()[0, :])
 
         # add uncertainty to pv data with unit truncated gaussian (only positive accepted)
@@ -607,19 +706,19 @@ class VoltageControl(MultiAgentEnv):
         clusters = dict()  # zone_res_buses, pv, q, sgen_res_buses
         if self.args.mode == "distributed":
             for i in range(len(self.powergrid.sgen)):
-                zone = self.powergrid.sgen["name"][i]
-                sgen_bus = self.powergrid.sgen["bus"][i]
-                pv = self.powergrid.sgen["p_mw"][i]
-                q = self.powergrid.sgen["q_mvar"][i]
-                zone_res_buses = self.powergrid.res_bus.sort_index().loc[self.powergrid.bus["zone"]==zone]
+                zone = self.powergrid.sgen["name"].iloc[i]
+                sgen_bus = self.powergrid.sgen["bus"].iloc[i]
+                pv = self.powergrid.sgen["p_mw"].iloc[i]
+                q = self.powergrid.sgen["q_mvar"].iloc[i]
+                zone_res_buses = self.powergrid.res_bus.sort_index().loc[self.powergrid.bus["zone"] == zone]
                 clusters[f"sgen{i}"] = (zone_res_buses, zone, pv, q, sgen_bus)
         elif self.args.mode == "decentralised":
             for i in range(self.n_agents):
-                zone_res_buses = self.powergrid.res_bus.sort_index().loc[self.powergrid.bus["zone"]==f"zone{i+1}"]
-                sgen_res_buses = self.powergrid.sgen["bus"].loc[self.powergrid.sgen["name"] == f"zone{i+1}"]
-                pv = self.powergrid.sgen["p_mw"].loc[self.powergrid.sgen["name"] == f"zone{i+1}"]
-                q = self.powergrid.sgen["q_mvar"].loc[self.powergrid.sgen["name"] == f"zone{i+1}"]
-                clusters[f"zone{i+1}"] = (zone_res_buses, pv, q, sgen_res_buses)
+                zone_res_buses = self.powergrid.res_bus.sort_index().loc[self.powergrid.bus["zone"] == f"zone{i + 1}"]
+                sgen_res_buses = self.powergrid.sgen["bus"].loc[self.powergrid.sgen["name"] == f"zone{i + 1}"]
+                pv = self.powergrid.sgen["p_mw"].loc[self.powergrid.sgen["name"] == f"zone{i + 1}"]
+                q = self.powergrid.sgen["q_mvar"].loc[self.powergrid.sgen["name"] == f"zone{i + 1}"]
+                clusters[f"zone{i + 1}"] = (zone_res_buses, pv, q, sgen_res_buses)
 
         return clusters
     
@@ -765,6 +864,7 @@ class VoltageControl(MultiAgentEnv):
             q_vals = self.powergrid.res_sgen["q_mvar"].loc[self.powergrid.sgen["name"] == zone]
             # Manejo de NaNs: si no hay sgen o es NaN, ponemos 0.0
             q_losses[zone] = np.nan_to_num(np.mean(np.abs(q_vals))) if not q_vals.empty else 0.0  # TODO: verificar si conviene sacar el abs (capacitivo=inductivo)
+
         if np.isnan(q_losses["main"]):
             q_losses["main"] = 0.0
         # 2. Asignamos los rewards a los agentes usando el mapeo de nombres
@@ -772,34 +872,76 @@ class VoltageControl(MultiAgentEnv):
             # Si el agente se llama 'agent_zone_1', la zona es 'zone_1'
             zone_id = agent_name.replace("agent_", "").replace("_", "")
 
-            # Mezclamos pérdida local + pérdida de la cabecera (main)
-            # Reward_i = -(Loss_local + weight * Loss_main)
+            # # Mezclamos pérdida local + pérdida de la cabecera (main)
+            # # Reward_i = -(Loss_local + weight * Loss_main)
+            # v_total = v_losses[zone_id] + v_losses["main"] * self.main_weight
+            #
+            # # Actualizar y escalar tensión
+            # self.max_v_seen = max(self.max_v_seen, v_total)
+            # v_scaled = v_total / self.max_v_seen
+            #
+            # if self.line_weight is not None:
+            #     # 2a. Calcular pérdidas brutas de línea
+            #     l_total = line_losses[zone_id] + line_losses["main"] * self.main_weight
+            #
+            #     # Actualizar y escalar línea
+            #     self.max_l_seen = max(self.max_l_seen, l_total)
+            #     l_scaled = l_total / self.max_l_seen
+            #
+            #     # Calcular pérdida final ponderada (máximo teórico de cada término es 1)
+            #     loss = (l_scaled * self.line_weight) + (v_scaled * self.voltage_weight)
+            # else:
+            #     # 2b. Calcular pérdidas brutas de reactiva
+            #     q_total = q_losses[zone_id] + q_losses["main"] * self.main_weight
+            #
+            #     # Actualizar y escalar reactiva
+            #     self.max_q_seen = max(self.max_q_seen, q_total)
+            #     q_scaled = q_total / self.max_q_seen
+            #
+            #     # Calcular pérdida final ponderada
+            #     loss = (q_scaled * q_weight_solv) + (v_scaled * self.voltage_weight)
+            #
+            # reward[agent_name] = -float(loss)
+            # 1. Definir bases fijas de normalización (evitar max_seen dinámicos)
+            Q_BASE_MVAR = 2.0  # Capacidad máxima esperada por zona en MVAR
+            Line_BASE = 0.4  # Máxima pérdida esperada promedio
+
+            # Pérdida de Tensión (usar barrier directa sin dividir por max_v)
             v_total = v_losses[zone_id] + v_losses["main"] * self.main_weight
+            v_scaled = v_total
 
-            # Actualizar y escalar tensión
-            self.max_v_seen = max(self.max_v_seen, v_total)
-            v_scaled = v_total / self.max_v_seen
+            # Pérdida de Línea
+            line_total = line_losses[zone_id] + line_losses["main"] * self.main_weight
+            line_scaled = (line_total / Line_BASE) ** 2  # Penaliza cuadráticamente picos de Q
 
-            if self.line_weight is not None:
-                # 2a. Calcular pérdidas brutas de línea
-                l_total = line_losses[zone_id] + line_losses["main"] * self.main_weight
+            # Pérdida de Reactiva (normalizada por base fija, penalización cuadrática)
+            q_total = q_losses[zone_id] + q_losses["main"] * self.main_weight
+            q_scaled = (q_total / Q_BASE_MVAR) ** 2  # Penaliza cuadráticamente picos de Q
 
-                # Actualizar y escalar línea
-                self.max_l_seen = max(self.max_l_seen, l_total)
-                l_scaled = l_total / self.max_l_seen
+            # Penalización por suavizado / variación de acción (evita oscilaciones bang-bang)
+            q_action_curr = action_dict[agent_name]  # Consigna actual
+            q_action_prev = self.prev_actions.get(agent_name, q_action_curr)
+            delta_q_loss = np.mean((q_action_curr - q_action_prev) ** 2)
+            self.prev_actions[agent_name] = q_action_curr
 
-                # Calcular pérdida final ponderada (máximo teórico de cada término es 1)
-                loss = (l_scaled * self.line_weight) + (v_scaled * self.voltage_weight)
+            # Cálculo final del Loss
+            # self.dq_dv_weight = 0.2  # Asignar peso a la variación brusca
+            # self.q_weight = 0.3  # Subir peso de Q (ej. 0.3)
+
+            if self.line_weight != None:
+                line_loss = line_scaled * self.line_weight
             else:
-                # 2b. Calcular pérdidas brutas de reactiva
-                q_total = q_losses[zone_id] + q_losses["main"] * self.main_weight
+                line_loss = 0
+            if self.q_weight != None:
+                q_loss = q_scaled * self.q_weight
+            else:
+                q_loss = 0
 
-                # Actualizar y escalar reactiva
-                self.max_q_seen = max(self.max_q_seen, q_total)
-                q_scaled = q_total / self.max_q_seen
 
-                # Calcular pérdida final ponderada
-                loss = (q_scaled * q_weight_solv) + (v_scaled * self.voltage_weight)
+            loss = (v_scaled * self.voltage_weight) + \
+                   line_loss + \
+                   q_loss + \
+                   (delta_q_loss * self.dv_dq_weight)
 
             reward[agent_name] = -float(loss)
 

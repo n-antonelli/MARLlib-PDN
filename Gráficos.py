@@ -43,9 +43,21 @@ dirección = {
 }
 
 device = 'oficina'
-mode = 'eval'
+mode = 'train'
 
-train_path = 'MAPPOTrainer_voltage_case33_3min_final_566f0_00000_0_2026-07-01_11-15-39'
+if mode == 'train':
+    time_data = '2026-08-28.11-46' # TRAIN
+    # '2026-08-24.10-48' Q_BASE_MVAR=5, "q_weight": 0.1
+    # '2026-08-25.16-55' Q_BASE_MVAR=2, "q_weight": 0.2
+    # '2026-08-26.12-43' Q_BASE_MVAR=5, "q_weight": 0.1, dq_dv_weight=0.1
+else:
+    time_data = '2026-08-28.09-03' # EVAL
+    # '2026-08-26.12-12' Q_BASE_MVAR=5, "q_weight": 0.1
+    # '2026-08-26.12-16' Q_BASE_MVAR=2, "q_weight": 0.2
+    # '2026-08-27.09-35' Q_BASE_MVAR=5, "q_weight": 0.1, dq_dv_weight=0.1
+topology = '33_3'
+
+train_path = f'mappo_{topology}_{time_data}'
 # line_losses
 # 'MAPPOTrainer_voltage_case33_3min_final_f66a3_00000_0_2026-05-18_08-23-15' physical_log20260518_082343
 # q_losses
@@ -57,8 +69,7 @@ train_path = 'MAPPOTrainer_voltage_case33_3min_final_566f0_00000_0_2026-07-01_11
 # q_losses
 # 'MAPPOTrainer_voltage_case33_3min_final_301f6_00000_0_2026-05-20_11-57-14'
 # 'IPPOTrainer_voltage_case33_3min_final_c6216_00000_0_2026-05-28_08-38-40'
-
-eval_path = 'MAPPOTrainer_voltage_case33_3min_final_83239_00000_0_2026-07-27_11-36-11'
+eval_path = f'mappo_{topology}_{time_data}'
 cantidad_agentes = 4
 
 if device == 'oficina':
@@ -73,30 +84,48 @@ tick_positions = np.arange(0, 480, 40)  # cada 48 steps = cada 2.4 hs ~ cada 2hs
 
 ventana = 50
 def calcular_promedio_movil(datos, ventana, mode):
-    datos = np.asarray(datos, dtype=float)
+    """
+    Calcula el promedio móvil.
+    En los bordes donde no cabe la ventana, MANTIENE los datos originales.
+    """
+    datos = np.asarray(datos)
     n = len(datos)
 
+    # Si hay menos datos que la ventana, devolvemos tal cual
     if n < ventana:
-        return datos.copy()
+        return datos
 
+    # 1. Crear el kernel de promedio
+    ventana_kernel = np.ones(ventana) / ventana
+
+    # 2. Calcular la parte central suavizada ('valid')
+    # Esto reduce el tamaño del array
+    datos_validos = np.convolve(datos, ventana_kernel, mode='valid')
+
+    # 3. Calcular el offset (cuántos datos quedan a la izquierda)
+    # Al centrar la ventana, sobran 'ventana // 2' elementos a cada lado aprox.
     offset = ventana // 2
-    resultado = np.zeros(n)
 
-    # Inicio: ventana creciente (clipping en el borde izquierdo)
-    for i in range(offset):
-        resultado[i] = np.mean(datos[0 : i + offset + 1])
+    # 4. Construir el resultado final
+    # a) Inicio: Tomamos los datos ORIGINALES desde el 0 hasta el offset
+    parte_inicio = datos[:offset]
 
-    # Centro: ventana completa con convolución
-    kernel = np.ones(ventana) / ventana
-    centro = np.convolve(datos, kernel, mode='valid')
-    resultado[offset : offset + len(centro)] = centro
+    # b) Final: Tomamos los datos ORIGINALES desde el final de la parte válida
+    # Calculamos dónde termina la parte válida dentro del array original
+    indice_final = offset + len(datos_validos)
+    if mode == 'eval':
+        parte_final = datos[indice_final:]
+    else:
+        parte_final = datos[indice_final: -ventana]
 
-    # Final: ventana decreciente (clipping en el borde derecho)
-    inicio_final = offset + len(centro)
-    for i in range(inicio_final, n):
-        resultado[i] = np.mean(datos[i - offset : n])
+    # c) Concatenar: Originales + Promedio + Originales
+    datos_suavizados = np.concatenate([parte_inicio, datos_validos, parte_final])
 
-    return resultado
+    return datos_suavizados
+
+init = 10
+final = 4000
+cantidad_valores_mostrados = 500
 
 if mode == 'train':
     with open(f'{url}'
@@ -106,16 +135,18 @@ if mode == 'train':
         train_data = []
         for episode in file:
             train_data.append(json.loads(episode))
-    # df = pd.read_csv(f'{url}\\examples\\exp_results\\mappo_mlp_case33_3min_final\\{train_path}\\results\\physical_log.csv')
-    df = pd.read_csv(f'C:\\PDN_runs\\Pruebas\\results\\physical_log_2026-07-01_11-15-55_732224.csv', error_bad_lines=False, warn_bad_lines=False,)
+    df = pd.read_csv(f'C:\\PDN_runs\\Pruebas\\results\\physical_log_{time_data}-52.csv', error_bad_lines=False, warn_bad_lines=False,)
+    # df = pd.read_csv(f'C:\\PDN_runs\\Pruebas\\results\\physical_log_2026-08-26.12-44.csv', error_bad_lines=False, warn_bad_lines=False,)
 
-    agents = train_data[0]['config']['model']['custom_model_config']['policy_mapping_info']['case33_3min_final']['team_prefix']
+    agents = train_data[0]['config']['model']['custom_model_config']['policy_mapping_info']['case33_3min']['team_prefix']
     agents = [f'agent_zone_{i+1}' for i in range(cantidad_agentes)]
     pol_agents = {f'agent_zone_{i+1}': f'pol_agent_zone_{i+1}' for i in range(cantidad_agentes)}
     figl, axl = plt.subplots(1,len(agents)+1, figsize=(12, 6))
     figr, axr = plt.subplots(1,len(agents)+1, figsize=(16, 6))
     figv, axv = plt.subplots(3, 1, figsize=(12, 10))
     figp, axp = plt.subplots(figsize=(12, 6))
+    figp1, axp1 = plt.subplots(figsize=(12, 6))
+    figp2, axp2 = plt.subplots(figsize=(12, 6))
 
     loss_episode = []
     loss_episode_ag0 = []
@@ -272,25 +303,70 @@ if mode == 'train':
     # print(p_consumed_ev)
 
     ep = df.groupby("episode").mean()
-    axv[0].set_title("Voltaje medio por episodio")
-    axv[1].set_title("Potencia reactiva generada")
-    axv[2].set_title("Porcentaje potencia perdida de línea")
-    # axv1 = axv.twinx()
+    ep = ep[init:final]
+    ventana = (final-init)//cantidad_valores_mostrados
+    v_mean_bus = calcular_promedio_movil(ep["v_mean_bus"], ventana, mode)
+    v_min = calcular_promedio_movil(ep["v_min"], ventana, mode)
+    v_max = calcular_promedio_movil(ep["v_max"], ventana, mode)
+    power_p_bus = calcular_promedio_movil(ep["power_p_bus"], ventana, mode)
+    power_q_bus = calcular_promedio_movil(ep["power_q_bus"], ventana, mode)
+    line_loading_perc = calcular_promedio_movil(ep["line_loading_perc"], ventana, mode)
+    perd_p_line_total = calcular_promedio_movil(ep["perd_p_line_total"], ventana, mode)
+    perd_q_line_total = calcular_promedio_movil(ep["perd_q_line_total"], ventana, mode)
+
+    axv[0].set_title("Voltaje de línea")
+    axv[1].set_title("Potencia de línea")
+    axv[2].set_title("Pérdida de línea")
+    axv2 = axv[2].twinx()
     # axv2 = axv.twinx()
-    axv[0].plot(range(0, len(ep["v_mean"])), np.asarray(ep["v_mean"]), label='v_mean')
-    axv[1].plot(range(0, len(ep["q_gen_total"])), np.asarray(ep["q_gen_total"]), label='q_gen_total', color='green')
-    axv[2].plot(range(0, len(ep["line_loading"])), np.asarray(ep["line_loading"]), label='line_loading', color='red')
+    # axv[0].plot(range(0, len(ep["v_mean_bus"][5:])), np.asarray(ep["v_mean_bus"][5:]), label='v_mean_bus')
+    # axv[1].plot(range(0, len(ep["q_gen_total"][5:])), np.asarray(ep["q_gen_total"][5:]), label='q_gen_total', color='green')
+    # axv[2].plot(range(0, len(ep["line_loading_perc"][5:])), np.asarray(ep["line_loading_perc"][5:]), label='line_loading_perc', color='red')
+    axv[0].plot(range(0, len(v_mean_bus)), v_mean_bus, label='v_mean_bus')
+    axv[0].plot(range(0, len(v_min)), v_min, label='v_min')
+    axv[0].plot(range(0, len(v_max)), v_max, label='v_max')
+    axv[0].axhline(y=0.95, color='red', linestyle='--', linewidth=1)
+    axv[0].axhline(y=1.05, color='red', linestyle='--', linewidth=1)
+    axv[1].plot(range(0, len(power_p_bus)), power_p_bus, label='power_p_bus')
+    axv[1].plot(range(0, len(power_q_bus)), power_q_bus, label='power_q_bus')
+    # axv[1].plot(range(0, len(np.asarray(ep["va_degree_bus"]))), np.asarray(ep["va_degree_bus"]), label='va_degree_bus')
+    axv2.plot(range(0, len(line_loading_perc)), line_loading_perc, label='porcentaje pérdidas línea', color='red')
+    axv[2].plot(range(0, len(perd_p_line_total)), perd_p_line_total, label='pérdidas P')
+    axv[2].plot(range(0, len(perd_q_line_total)), perd_q_line_total, label='pérdidas Q')
     axv[0].legend(loc='best')
     axv[1].legend(loc='best')
-    axv[2].legend(loc='best')
+    axv[2].legend(loc='upper left')
+    axv2.legend(loc='upper right')
+    axv[0].set_ylim(0.9,1.1)
+    # axv[1].set_ylim(-0.015, 0.01)
+    # axv[2].set_ylim(0.0, 0.5)
+    # axv2.set_ylim(0.0, 0.0001)
     figv.show()
 
+    load_p = calcular_promedio_movil(ep["load_p"], ventana, mode)
+    load_q = calcular_promedio_movil(ep["load_q"], ventana, mode)
+    axp1.set_title('Consumos')
+    axp1.plot(range(0, len(load_p)), load_p, label='P consumida total [MW]')
+    axp1.plot(range(0, len(load_q)), load_q, label='Q consumida total [MVAR]')
+    axp1.legend(loc='best')
+    figp1.show()
+
+    p_gen_total = calcular_promedio_movil(ep["p_gen_total"], ventana, mode)
+    q_gen_total = calcular_promedio_movil(ep["q_gen_total"], ventana, mode)
+    axp2.set_title('Generación fotovoltáica')
+    axp2.plot(range(0, len(p_gen_total)), p_gen_total, label='P generada total [MW]')
+    axp2.plot(range(0, len(q_gen_total)), q_gen_total, label='Q generada total [MVAR]')
+    axp2.legend(loc='best')
+    figp2.show()
+
+    percentage_of_v_out_of_control = calcular_promedio_movil(ep["percentage_of_v_out_of_control"], ventana, mode)
     axp.set_title('percentage_of_v_out_of_control')
-    axp.plot(range(0, len(ep["percentage_of_v_out_of_control"])), np.asarray(ep["percentage_of_v_out_of_control"]), label='v_out_con')
+    axp.plot(range(0, len(percentage_of_v_out_of_control)), percentage_of_v_out_of_control, label='v_out_con')
     axp.legend(loc='best')
     figp.show()
 
-    # ------ evaluación ------
+# ------ evaluación ------
+
 elif mode == 'eval':
     with open(f'{url}'
               f'\\{eval_path}'
@@ -299,38 +375,89 @@ elif mode == 'eval':
         eval_data = []
         for episode in file:
             eval_data.append(json.loads(episode))
-    df = pd.read_csv(f'C:\\PDN_runs\\Pruebas\\results\\physical_log_2026-07-27_11-36-17.csv')
+    df = pd.read_csv(f'C:\\PDN_runs\\Pruebas\\results\\physical_log_{time_data}.csv') #physical_log_2026-07-27_11-36-17
     # agents = eval_data[0]["rewards"].keys()
     # agents = [f'agent_zone_{i + 1}' for i in range(cantidad_agentes)]
     agents = [f'agent_zone_{i + 1}' for i in range(cantidad_agentes)]
-    # figre, axre = plt.subplots(figsize=(12, 6))
-    figve, axve = plt.subplots(3, 1, figsize=(12, 6))
-    figppe, axppe = plt.subplots(figsize=(12, 6))
-    figpce, axpce = plt.subplots(figsize=(12, 6))
+    figli, axli = plt.subplots(3, 1, figsize=(12, 6))
+    figlo, axlo = plt.subplots(figsize=(12, 6))
+    figgf, axgf = plt.subplots(figsize=(12, 6))
+    figex, axex = plt.subplots(figsize=(12, 6))
 
     # Por step dentro de un episodio específico
     ep = df[df["episode"] == 1]  # 1 para summer, 0  para winter
     ep = ep.iloc[0:480]
 
-    axve[0].set_title("Voltaje medio por episodio")
-    axve[1].set_title("Potencia reactiva generada")
-    axve[2].set_title("Porcentaje potencia perdida de línea")
-    values = np.asarray(ep["v_mean"].values)
-    largo = len(np.asarray(ep["v_mean"].values))
-    axve[0].plot(range(0, len(np.asarray(ep["v_mean"]))), np.asarray(ep["v_mean"].values), label='v_mean')
-    axve[1].plot(range(0, len(np.asarray(ep["q_gen_total"]))), np.asarray(ep["q_gen_total"]), label='q_gen_total', color='green')
-    axve[2].plot(range(0, len(np.asarray(ep["line_loading"]))), np.asarray(ep["line_loading"]), label='line_loading', color='red')
-    axve[0].set_xticks([])
-    axve[1].set_xticks([])
-    axve[2].set_xticks(tick_positions)
-    axve[2].set_xticklabels(time_labels[tick_positions], rotation=45)
-    axve[0].legend(loc='best')
-    axve[1].legend(loc='best')
-    axve[2].legend(loc='best')
-    figve.show()
+    axli[0].set_title("Voltaje de línea")
+    axli[1].set_title("Potencia de línea")
+    axli[2].set_title("Pérdida de línea")
+    values = np.asarray(ep["v_mean_bus"].values)
+    largo = len(np.asarray(ep["v_mean_bus"].values))
+    axli[0].plot(range(0, len(np.asarray(ep["v_mean_bus"]))), np.asarray(ep["v_mean_bus"].values), label='v_mean_bus')
+    axli[0].plot(range(0, len(np.asarray(ep["v_min"]))), np.asarray(ep["v_min"].values), label='v_min')
+    axli[0].plot(range(0, len(np.asarray(ep["v_max"]))), np.asarray(ep["v_max"].values), label='v_max')
+    axli[0].axhline(y=0.95, color='red', linestyle='--', linewidth=1)
+    axli[0].axhline(y=1.05, color='red', linestyle='--', linewidth=1)
+    axli[1].plot(range(0, len(np.asarray(ep["power_p_bus"]))), np.asarray(ep["power_p_bus"]), label='power_p_bus')
+    axli[1].plot(range(0, len(np.asarray(ep["power_q_bus"]))), np.asarray(ep["power_q_bus"]), label='power_q_bus')
+    # axli[1].plot(range(0, len(np.asarray(ep["va_degree_bus"]))), np.asarray(ep["va_degree_bus"]), label='va_degree_bus')
+    axli[2].plot(range(0, len(np.asarray(ep["line_loading_perc"]))), np.asarray(ep["line_loading_perc"]), label='porcentaje pérdidas línea')
+    axli[2].plot(range(0, len(np.asarray(ep["perd_p_line_total"]))), np.asarray(ep["perd_p_line_total"]), label='pérdidas P')
+    axli[2].plot(range(0, len(np.asarray(ep["perd_q_line_total"]))), np.asarray(ep["perd_q_line_total"]), label='pérdidas Q')
+    axli[0].set_xticks([])
+    axli[1].set_xticks([])
+    axli[2].set_xticks(tick_positions)
+    axli[2].set_xticklabels(time_labels[tick_positions], rotation=45)
+    axli[0].legend(loc='best')
+    axli[1].legend(loc='best')
+    axli[2].legend(loc='best')
+    figli.show()
 
-    axppe.set_title('percentage_of_v_out_of_control')
-    axppe.plot(range(0, len(np.asarray(ep["percentage_of_v_out_of_control"]))), np.asarray(ep["percentage_of_v_out_of_control"]), label='v_out_con')
-    axppe.set_xticks(tick_positions)
-    axppe.legend(loc='best')
-    figppe.show()
+    axlo.set_title('Consumos')
+    axlo.plot(range(0, len(np.asarray(ep["load_p"]))), np.asarray(ep["load_p"]), label='P consumida total [MW]')
+    axlo.plot(range(0, len(np.asarray(ep["load_q"]))), np.asarray(ep["load_q"]), label='Q consumida total [MVAR]')
+    axlo.set_xticks(tick_positions)
+    axlo.set_xticklabels(time_labels[tick_positions], rotation=45)
+    axlo.legend(loc='best')
+    figlo.show()
+
+    axgf.set_title('Generación fotovoltáica')
+    axgf.plot(range(0, len(np.asarray(ep["p_gen_total"]))), np.asarray(ep["p_gen_total"]), label='P generada total [MW]')
+    axgf.plot(range(0, len(np.asarray(ep["q_gen_total"]))), np.asarray(ep["q_gen_total"]), label='Q generada total [MVAR]')
+    axgf.set_xticks(tick_positions)
+    axgf.set_xticklabels(time_labels[tick_positions], rotation=45)
+    axgf.legend(loc='best')
+    figgf.show()
+
+    axex.set_title('extras')
+    axex.plot(range(0, len(np.asarray(ep["percentage_of_v_out_of_control"]))), np.asarray(ep["percentage_of_v_out_of_control"]), label='v_out_con')
+    # axex.plot(range(0, len(np.asarray(ep["frec"]))), np.asarray(ep["frec"]), label='frec')
+    axex.set_xticks(tick_positions)
+    axex.set_xticklabels(time_labels[tick_positions], rotation=45)
+    axex.legend(loc='best')
+    figex.show()
+
+    # Datos de las líneas
+    # "v_mean_bus"
+    # "v_min"
+    # "v_max"
+    # "va_degree_bus"
+    # "power_p_bus"
+    # "power_q_bus"
+    # # Datos de las pérdidas en la línea
+    # "perd_p_line_total"
+    # "perd_q_line_total"
+    # "line_loading_perc"
+    # # Datos de la generación fotovoltáica
+    # "p_gen_total"
+    # "q_gen_total"
+    # # Custom metrics
+    # "average_voltage"
+    # "total_line_loss"
+    # "q_loss"
+    # # Datos de la carga
+    # "load_p"
+    # "load_q"
+    # Extras
+    # "percentage_of_v_out_of_control"
+    # "frec"

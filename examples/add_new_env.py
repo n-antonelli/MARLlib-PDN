@@ -48,10 +48,11 @@ import tree
 
 
 # os.environ["TORCH_CUDA_ARCH_LIST"] = "12.0"
-mode = 'eval'  # 'eval'/'train'
-num_chec = 5400
-path = "MAPPOTrainer_voltage_case33_3min_final_566f0_00000_0_2026-07-01_11-15-39"
-
+mode = 'train'  # eval/train
+eval_season = 'alternate'  # alternate/winter/summer
+path = "mappo_33_3_2026-08-28.10-11"
+num_chec = 4300
+check = f"checkpoint_{str(num_chec).zfill(6)}"
 # register all scenario with env class
 REGISTRY = {}
 REGISTRY["Checkers"] = Checkers
@@ -143,14 +144,15 @@ if __name__ == '__main__':
     # MPE
     # env = marl.make_env(environment_name="mpe", map_name="simple_spread", force_coop=True)
     # Power Distribution Networks
-    env = marl.make_env(environment_name="voltage", map_name="case33_3min_final", train_eval = mode)  # case33_3min_final / case141_3min_final / case322_3min_final
+    env = marl.make_env(environment_name="voltage", map_name="case33_3min", train_eval=mode, eval_season=eval_season)  # case33_3min_final / case141_3min_final / case322_3min_final
 
     ######## algoritmos ########
-    algoritmo = "mappo"
-    eleccion = {"mappo": marl.algos.mappo,
-                "ippo": marl.algos.ippo,
-                "vdppo": marl.algos.vdppo,
-                "maddpg": marl.algos.maddpg
+    algoritmo = "MAPPO"
+    eleccion = {"MAPPO": marl.algos.mappo,
+                "HAPPO": marl.algos.happo,
+                "IPPO": marl.algos.ippo,
+                "VDPPO": marl.algos.vdppo,
+                "MADDPG": marl.algos.maddpg
                 }
     if mode == 'train':
         # pick algorithms
@@ -159,7 +161,9 @@ if __name__ == '__main__':
         model = marl.build_model(env, algo, {"core_arch": "mlp"}) #, "encode_layer": "128-128"})
         print(env)
         # start learning
-        algo.fit(env, model, stop={'episode_reward_mean': -1, 'timesteps_total': 10000000}, share_policy='individual', checkpoint_freq=100, num_to_keep=2)  # num_workers=2
+        algo.fit(env, model, stop={'episode_reward_mean': -1, 'timesteps_total': 10000000},
+                 share_policy='individual', checkpoint_freq=100, num_to_keep=2,
+                 )
 
     # elif mode == 'eval':
     #
@@ -234,33 +238,34 @@ if __name__ == '__main__':
 
                 # Convertir arreglos numéricos estables
                 tensor = torch.from_numpy(arr)
+                # tensor = torch.from_numpy(np.ascontiguousarray(arr))
                 return tensor if device is None else tensor.to(device)
 
             # Respetamos el recorrido recursivo original de RLlib
             return tree.map_structure(mapping, x)
 
 
-        # PARCHE CRÍTICO: Sobrescribir en ambos módulos para evitar el problema de referencias locales
+        # Sobrescribir en ambos módulos para evitar el problema de referencias locales
         torch_ops.convert_to_torch_tensor = mapeo_seguro
         torch_policy.convert_to_torch_tensor = mapeo_seguro
 
-        # El resto de tu código se mantiene igual
         algo = eleccion[algoritmo](hyperparam_source="test")
         model = marl.build_model(env, algo, {"core_arch": "mlp"})
         print(env)
 
         # Evaluación pura
         # algo.render(env, model,
+                    # stop = {"training_iteration": 2},
         #             restore_path={'params_path': f"C:\\PDN_runs\\Pruebas\\{path}\\params.json",
-        #                           'model_path': f"C:\\PDN_runs\\Pruebas\\{path}\\checkpoint_00{num_chec}\\checkpoint-{num_chec}"},
+        #                           'model_path': f"C:\\PDN_runs\\Pruebas\\{path}\\{check}\\checkpoint-{num_chec}"},
         #             local_mode=True,
         #             share_policy="individual",
         #             checkpoint_end=False)
         algo.fit(
                 env,
                 model,
-                # stop={"training_iteration": 1},  # Obliga a detenerse tras 1 sola pasada
-                local_mode=True, num_workers=1,
+                stop={"training_iteration": 2 if eval_season == 'alternate' else 1},  # Obliga a detenerse
+                local_mode=True, num_workers=1, share_policy="individual", checkpoint_end=False,
                 restore_path={'params_path': f"C:\\PDN_runs\\Pruebas\\{path}\\params.json",
-                              'model_path': f"C:\\PDN_runs\\Pruebas\\{path}\\checkpoint_00{num_chec}\\checkpoint-{num_chec}"}
-            )
+                              'model_path': f"C:\\PDN_runs\\Pruebas\\{path}\\{check}\\checkpoint-{num_chec}"},
+        )

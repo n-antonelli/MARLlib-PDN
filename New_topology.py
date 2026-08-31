@@ -1,14 +1,16 @@
-import pandapower as pp
 import pickle
 import pandas as pd
 import json
+from pprint import pprint
 
-# 1. Cargar la red original desde el binario model.p
-ruta_original = "marllib/patch/dpn/var_voltage_control/data/case33_3min_final/model.p"
+mode = "train"
+# Modificar la topología de la red mediante model.p
+# Cargar la red original desde el binario model.p
+ruta_original = f"marllib/patch/dpn/var_voltage_control/data/case33_3min_{mode}/model.p"
 with open(ruta_original, "rb") as f:
     net = pickle.load(f)
 
-# 1. Convertimos el diccionario interno 'DF' en un DataFrame real de Pandas
+# Convertimos el diccionario interno 'DF' en un DataFrame real de Pandas
 df_line = pd.DataFrame(**net["line"]["DF"])
 print("--- TOPOLOGÍA DE LÍNEAS ACTUALES ---")
 print(df_line[["from_bus", "to_bus", "length_km", "r_ohm_per_km"]])
@@ -30,16 +32,17 @@ print(df_line[["from_bus", "to_bus", "length_km", "r_ohm_per_km"]])
 # =========================================================================
 # OPCIÓN C: Modificar switches
 # =========================================================================
-# 1- Modificar estado switch
+# Modificar estado switch
 # El case33 suele tener "tie-lines" (líneas de enlace abiertas). Si cambias
 # el estado de un switch de Abierto (False) a Cerrado (True), modificas la topología.
 # net.switch.at[0, 'closed'] = True  # Cierra un interruptor específico
-# 2- Crear nuevo switch
+# =========================================================================
+# OPCIÓN D: Crear nuevo switch
+# =========================================================================
 # Crear un switch cerrado (closed=True) que conecta la barra 'bus' con la línea 'element'
 # Convertir la tabla de switches a un DataFrame de Pandas
 df_switch = pd.DataFrame(**net["switch"]["DF"])
 
-# Crear el nuevo switch con los datos que querías
 # Como la tabla original está vacía (index []), lo agregamos en la posición 0
 nuevo_switch = {
     'bus': 0,           # Nodo al que se conecta
@@ -53,27 +56,33 @@ nuevo_switch = {
 # Inyectamos la fila en el DataFrame
 df_switch.loc[len(df_switch)] = nuevo_switch
 
-# Eliminar todos los switches
-df_switch = df_switch.iloc[0:0]
-# Eliminar un switch en particular (0)
+# =========================================================================
+# OPCIÓN E: Eliminar todos los switches
+# =========================================================================
+# df_switch = df_switch.iloc[0:0]
+
+# =========================================================================
+# OPCIÓN F: Eliminar un switch en particular (0)
+# =========================================================================
 # df_switch = df_switch.drop(index=0)
 
-# Volver a convertir al formato de diccionario anidado que usa MARLlib
-net["switch"]["DF"] = json.loads(df_switch.to_json(orient='split'))
 # =========================================================================
-
-# =========================================================================
-# OPCIÓN D: Dar de baja a una línea
+# OPCIÓN G: Dar de baja a una línea
 # =========================================================================
 # Desconectar por completo la línea con índice 5 (abre el circuito en esa rama)
 # net.line.at[5, 'in_service'] = False
 
 
-
-# 2. Guardar la NUEVA topología reemplazando el archivo que leerá MARLlib
+# Volver a convertir al formato de diccionario anidado que usa MARLlib
+net["switch"]["DF"] = json.loads(df_switch.to_json(orient='split'))
+# Guardar la NUEVA topología reemplazando el archivo que leerá MARLlib
 # Consejo: Haz una copia de seguridad de tu model.p original antes de correr esto
-ruta_destino = "marllib/patch/dpn/var_voltage_control/data/case33_3min_final/model.p"
+ruta_destino = f"marllib/patch/dpn/var_voltage_control/data/case33_3min_{mode}/model.p"
 with open(ruta_destino, "wb") as f:
     pickle.dump(net, f)
+# Abrir en modo de lectura binaria ('rb')
+with open(ruta_destino, "rb") as f:
+    datos_red = pickle.load(f)
 
 print("¡Nueva topología guardada con éxito en model.p!")
+pprint(datos_red)

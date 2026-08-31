@@ -75,6 +75,7 @@ def make_env(
         force_coop: bool = False,
         abs_path: str = "",
         train_eval: str = "",
+        eval_season: str = "",
         **env_params
 ) -> Tuple[MultiAgentEnv, Dict]:
     """

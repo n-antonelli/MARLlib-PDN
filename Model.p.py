@@ -1,6 +1,7 @@
 import pickle
 from pprint import pprint
 
+# Abrir de forma visible el archivo model.p
 ruta = "marllib/patch/dpn/var_voltage_control/data/case33_3min_final/model.p"
 
 # Abrir en modo de lectura binaria ('rb')
