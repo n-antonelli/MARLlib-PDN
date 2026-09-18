@@ -2,34 +2,12 @@ import pickle
 import json
 import numpy as np
 import matplotlib.pyplot as plt
-from datetime import datetime
+from datetime import datetime, timedelta
 import pandas as pd
-
-# def reward_function(v):
-#     if np.abs(v) < 1:
-#         return np.exp(-1 / (1 - v**4))
-#     elif 1 < v < 3:
-#         return np.exp(-1 / (1 - (v - 2)**4))
-#     else:
-#         return 0.0
-#
-# # Vectorizar la función para usarla con arrays de numpy
-# v_func = np.vectorize(reward_function)
-#
-# # Generar datos para el gráfico
-# v_vals = np.linspace(-1.5, 3.5, 400)
-# reward_vals = v_func(v_vals)
-#
-# plt.figure(figsize=(8, 4))
-# plt.plot(v_vals, reward_vals, label="Reward Shaping", color='blue', lw=2)
-# plt.axhline(0, color='black', lw=0.5, ls='--')
-# plt.title("Visualización de la Función de Recompensa (Doble Bump)")
-# plt.xlabel("Estado (v)")
-# plt.ylabel("Recompensa")
-# plt.grid(True, alpha=0.3)
-# plt.legend()
-# plt.show()
-
+from pathlib import Path
+import time
+import ast
+import matplotlib.ticker as ticker
 
 actual_date = datetime.now().date()
 algo = "PPO"
@@ -46,29 +24,21 @@ device = 'oficina'
 mode = 'train'
 
 if mode == 'train':
-    time_data = '2026-08-28.11-46' # TRAIN
+    time_data = '2026-09-17.12-20' # 07.08-58' # TRAIN
     # '2026-08-24.10-48' Q_BASE_MVAR=5, "q_weight": 0.1
     # '2026-08-25.16-55' Q_BASE_MVAR=2, "q_weight": 0.2
     # '2026-08-26.12-43' Q_BASE_MVAR=5, "q_weight": 0.1, dq_dv_weight=0.1
-else:
-    time_data = '2026-08-28.09-03' # EVAL
+elif mode == 'eval':
+    time_data = '2026-09-17.09-10' # EVAL
     # '2026-08-26.12-12' Q_BASE_MVAR=5, "q_weight": 0.1
     # '2026-08-26.12-16' Q_BASE_MVAR=2, "q_weight": 0.2
     # '2026-08-27.09-35' Q_BASE_MVAR=5, "q_weight": 0.1, dq_dv_weight=0.1
+else:
+    print('Definir bien mode')
 topology = '33_3'
 
 train_path = f'mappo_{topology}_{time_data}'
-# line_losses
-# 'MAPPOTrainer_voltage_case33_3min_final_f66a3_00000_0_2026-05-18_08-23-15' physical_log20260518_082343
-# q_losses
-# 'MAPPOTrainer_voltage_case33_3min_final_aa900_00000_0_2026-05-19_09-02-53' physical_log20260519_090314
-# rewards escalados
-# line_losses
-# 'MAPPOTrainer_voltage_case33_3min_final_8b089_00000_0_2026-05-21_08-38-10'
-# 'IPPOTrainer_voltage_case33_3min_final_f1633_00000_0_2026-05-26_09-03-44'
-# q_losses
-# 'MAPPOTrainer_voltage_case33_3min_final_301f6_00000_0_2026-05-20_11-57-14'
-# 'IPPOTrainer_voltage_case33_3min_final_c6216_00000_0_2026-05-28_08-38-40'
+
 eval_path = f'mappo_{topology}_{time_data}'
 cantidad_agentes = 4
 
@@ -124,7 +94,7 @@ def calcular_promedio_movil(datos, ventana, mode):
     return datos_suavizados
 
 init = 10
-final = 4000
+final = 6200
 cantidad_valores_mostrados = 500
 
 if mode == 'train':
@@ -135,8 +105,30 @@ if mode == 'train':
         train_data = []
         for episode in file:
             train_data.append(json.loads(episode))
-    df = pd.read_csv(f'C:\\PDN_runs\\Pruebas\\results\\physical_log_{time_data}-52.csv', error_bad_lines=False, warn_bad_lines=False,)
-    # df = pd.read_csv(f'C:\\PDN_runs\\Pruebas\\results\\physical_log_2026-08-26.12-44.csv', error_bad_lines=False, warn_bad_lines=False,)
+
+    date_format = '%Y-%m-%d.%H-%M'
+    folder = Path(r'C:\PDN_runs\Pruebas\results')
+
+    # Convertir el string inicial a objeto datetime
+    dt = datetime.strptime(time_data, date_format)
+
+    # Ruta del archivo inicial
+    file_path = folder / f'physical_log_{dt.strftime(date_format)}.csv'
+
+    # Sumar 1 segundo iterativamente hasta encontrar el archivo
+    while not file_path.exists():
+        dt += timedelta(minutes=1)
+        time_data = dt.strftime(date_format)
+        file_path = folder / f'physical_log_{time_data}.csv'
+        print(file_path)
+        time.sleep(1)
+
+
+    df = pd.read_csv(file_path, error_bad_lines=False, warn_bad_lines=False,)
+    df = df.apply(pd.to_numeric, errors="coerce")
+    df = df.dropna(subset=["episode"])
+    df["episode"] = df["episode"].astype(int)
+    # df = pd.read_csv(f'C:\\PDN_runs\\Pruebas\\results\\physical_log_2026-09-01.08-48-13.csv', error_bad_lines=False, warn_bad_lines=False,)
 
     agents = train_data[0]['config']['model']['custom_model_config']['policy_mapping_info']['case33_3min']['team_prefix']
     agents = [f'agent_zone_{i+1}' for i in range(cantidad_agentes)]
@@ -177,45 +169,16 @@ if mode == 'train':
     p_consumed_building_pv = []
     p_consumed_building_storage = []
 
-    # pol_pv
-    # pol_building
-    # ['learner']['pol_ev']['learner_stats']['total_loss']
-    # print((data[1]['info']['learner']['pol_ev']['learner_stats']['total_loss']))
-    # print(data[episode]['info']['learner'])
-    #Sacar tipos de agentes (nombres)
     for episode in range(1, len(train_data)): #len(data)): # TODO: Está hecho para 3 agentes
         loss_episode_ag0.append(train_data[episode]['info']['learner'][pol_agents[agents[0]]]['learner_stats']['total_loss'])
         loss_episode_ag1.append(train_data[episode]['info']['learner'][pol_agents[agents[1]]]['learner_stats']['total_loss'])
         loss_episode_ag2.append(train_data[episode]['info']['learner'][pol_agents[agents[2]]]['learner_stats']['total_loss'])
         loss_episode_ag3.append(train_data[episode]['info']['learner'][pol_agents[agents[3]]]['learner_stats']['total_loss'])
-        # loss_episode_ag4.append(train_data[episode]['info']['learner'][pol_agents[agents[4]]]['learner_stats']['total_loss'])
-        #loss_episode.append(sum(loss_episode_ag2[episode],loss_episode_ag1[episode], loss_episode_ag0[episode]))
-
-        # if 'shared_policy' in train_data[episode]['policy_reward_max']:
-        #     reward_episode.append(train_data[episode]['policy_reward_max']['shared_policy'])
-        # else:
-        #     pass
-
         reward_episode_ag0.append(train_data[episode]['policy_reward_mean'][pol_agents[agents[0]]])
         reward_episode_ag1.append(train_data[episode]['policy_reward_mean'][pol_agents[agents[1]]])
         reward_episode_ag2.append(train_data[episode]['policy_reward_mean'][pol_agents[agents[2]]])
         reward_episode_ag3.append(train_data[episode]['policy_reward_mean'][pol_agents[agents[3]]])
-        # reward_episode_ag4.append(train_data[episode]['policy_reward_mean'][pol_agents[agents[4]]])
         reward_episode.append(train_data[episode]['episode_reward_mean'])
-        # reward_episode_ag1.append(train_data[episode]['policy_reward_mean'][pol_agents[agents[1]]])
-        # reward_episode_ag2.append(train_data[episode]['policy_reward_mean'][pol_agents[agents[2]]])
-
-        # vvio.append(train_data[episode]["custom_metrics"]["vvio"]) # TODO: No andan para IPPO
-        # powerp_1.append(train_data[episode]["custom_metrics"][f"powerp_mean_{agents[0]}_mean"])
-        # powerp_2.append(train_data[episode]["custom_metrics"][f"powerp_mean_{agents[1]}_mean"])
-        # powerp_3.append(train_data[episode]["custom_metrics"][f"powerp_mean_{agents[2]}_mean"])
-
-        # # print(train_data[episode]["custom_metrics"])
-        # p_consumed_pv.append(train_data[episode]["custom_metrics"]["p_consumed_pv_mean"])
-        # p_consumed_ev.append(train_data[episode]["custom_metrics"]["p_consumed_ev-charging_mean"])
-        # p_consumed_building_building.append(train_data[episode]["custom_metrics"]["p_consumed_building_building_mean"])
-        # p_consumed_building_pv.append(train_data[episode]["custom_metrics"]["p_consumed_building_pv_mean"])
-        # p_consumed_building_storage.append(train_data[episode]["custom_metrics"]["p_consumed_building_storage_mean"])
 
     loss_episode_ag = {agents[0]: loss_episode_ag0,
                     agents[1]: loss_episode_ag1,
@@ -225,7 +188,7 @@ if mode == 'train':
                     }
 
     loss_episode = [a + b + c + d for a, b, c, d in zip(loss_episode_ag0, loss_episode_ag1, loss_episode_ag2, loss_episode_ag3)]
-    # axl.plot(range(0, len(loss_episode)), np.asarray(loss_episode), label=f'loss')
+
     for i in range(len(agents) + 1):
 
         if i == len(agents):
@@ -238,7 +201,7 @@ if mode == 'train':
             axl[i].set_title(f'Loss - {agents[i]}')
             axl[i].plot(range(0, len(loss_episode_ag[agents[i]])), np.asarray(loss_episode_ag[agents[i]]), label=f'{agents[i]}')
             axl[i].legend(loc='best')
-
+        axl[i].grid(True, alpha=0.3)
 
     reward_episode_ag = {agents[0]: reward_episode_ag0,
                          agents[1]: reward_episode_ag1,
@@ -246,63 +209,26 @@ if mode == 'train':
                          agents[3]: reward_episode_ag3,
                          # agents[4]: reward_episode_ag4,
                          }
-    # axl.legend(loc='best')
-    # axl.set_xlim(50, )
-    # axl.set_ylim(0, 100000)
+
     #figl.savefig(f'Loss_{actual_date}_{algo}.png', dpi=600)
     figl.show()
-    # axr.plot(range(0, len(reward_episode)), np.asarray(reward_episode), label=f'rew')
     for i in range(len(agents)+1):
         if i == len(agents):
             axr[i].plot(range(0, len(reward_episode)), np.asarray(reward_episode), label='total_rew')
         else:
             axr[i].set_title(f'{algoritmo} reward- {agents[i]}')
             axr[i].plot(range(0, len(reward_episode_ag[agents[i]])), np.asarray(reward_episode_ag[agents[i]]), label=f'rew_{agents[i]}')
-
-    # axr.legend(loc='best')
-    # axr.set_xlim(50, )
-    # axr.set_ylim(-1000, 0)
-    #figr.savefig(f'curvas/Reward{actual_date}_{algo}.png', dpi=600)
+        axr[i].grid(True, alpha=0.3)
     figr.show()
 
-    # axv.set_title(f'{algoritmo} vvio')
-    # axv.plot(range(0, len(vvio)), np.asarray(vvio), label=f'vvio')
-    # figv.show()
-    #
-    # # Primer eje Y (izquierdo) con powerp_1 y powerp_2
-    # axp.set_title(f'{algoritmo} Power P')
-    # axp.plot(range(0, len(powerp_1)), np.asarray(powerp_1), label=f'power {agents[0]}')
-    # axp.plot(range(0, len(powerp_2)), np.asarray(powerp_2), label=f'power {agents[1]}')
-    # axp.plot(range(0, len(powerp_3)), np.asarray(powerp_3), label=f'power {agents[2]}')
-    #
-    # axp.set_ylabel(f"Power {agents[0]}")
-    # axp.tick_params(axis='y', labelcolor='red')
-    #
-    # # # Segundo eje Y (derecho) con powerp_3
-    # # axp2 = axp.twinx()
-    # # axp2.plot(range(0, len(powerp_2)), np.asarray(powerp_2), label=f'power {agents[1]}', color='green')
-    # # axp2.plot(range(0, len(powerp_3)), np.asarray(powerp_3), label=f'power {agents[2]}', color='blue')
-    # # axp2.set_ylabel(f"Power {agents[1]} y {agents[2]}")
-    # # axp2.tick_params(axis='y', labelcolor='black')
-    #
-    # # Leyenda combinada
-    # lines1, labels1 = axp.get_legend_handles_labels()
-    # # lines2, labels2 = axp2.get_legend_handles_labels()
-    # # axp.legend(lines1 + lines2, labels1 + labels2, loc='best')
-    # figp.tight_layout()
-    # figp.show()
-    #
-    # # axp1.set_title(f'{algoritmo} - p_consumed')
-    # # axp1.plot(range(0, len(p_consumed_pv)), np.asarray(p_consumed_pv), label=f'pv')
-    # # axp1.plot(range(0, len(p_consumed_ev)), np.asarray(p_consumed_ev), label=f'ev')
-    # # axp1.plot(range(0, len(p_consumed_building_building)), np.asarray(p_consumed_building_building), label=f'building_building')
-    # # axp1.plot(range(0, len(p_consumed_building_pv)), np.asarray(p_consumed_building_pv), label=f'building_pv')
-    # # axp1.plot(range(0, len(p_consumed_building_storage)), np.asarray(p_consumed_building_storage), label=f'building_storage')
-    # # axp1.legend()
-    # # figp1.show()
-    # print(p_consumed_ev)
-
-    ep = df.groupby("episode").mean()
+    # Crear un diccionario que aplique 'mean' a todas las columnas por defecto
+    agg_dict = {col: "mean" for col in df.columns if col not in ["episode", "step", "percentage_of_v_out_of_control"]}
+    # Sobrescribir las métricas donde te interesan los picos del episodio
+    agg_dict["v_max"] = "max"  # Máximo absoluto alcanzado en el episodio
+    agg_dict["v_min"] = "min"  # Mínimo absoluto alcanzado en el episodio
+    agg_dict["percentage_of_v_out_of_control"] = "max"
+    # Agrupar y filtrar
+    ep = df.groupby("episode").agg(agg_dict)
     ep = ep[init:final]
     ventana = (final-init)//cantidad_valores_mostrados
     v_mean_bus = calcular_promedio_movil(ep["v_mean_bus"], ventana, mode)
@@ -333,11 +259,12 @@ if mode == 'train':
     axv2.plot(range(0, len(line_loading_perc)), line_loading_perc, label='porcentaje pérdidas línea', color='red')
     axv[2].plot(range(0, len(perd_p_line_total)), perd_p_line_total, label='pérdidas P')
     axv[2].plot(range(0, len(perd_q_line_total)), perd_q_line_total, label='pérdidas Q')
-    axv[0].legend(loc='best')
+    axv[0].legend(loc='upper left')
     axv[1].legend(loc='best')
     axv[2].legend(loc='upper left')
     axv2.legend(loc='upper right')
-    axv[0].set_ylim(0.9,1.1)
+    axv[0].grid(True, alpha=0.3)
+    axv[0].set_ylim(0.65,1.25)
     # axv[1].set_ylim(-0.015, 0.01)
     # axv[2].set_ylim(0.0, 0.5)
     # axv2.set_ylim(0.0, 0.0001)
@@ -357,12 +284,14 @@ if mode == 'train':
     axp2.plot(range(0, len(p_gen_total)), p_gen_total, label='P generada total [MW]')
     axp2.plot(range(0, len(q_gen_total)), q_gen_total, label='Q generada total [MVAR]')
     axp2.legend(loc='best')
+    axp2.grid(True, alpha=0.3)
     figp2.show()
 
-    percentage_of_v_out_of_control = calcular_promedio_movil(ep["percentage_of_v_out_of_control"], ventana, mode)
+    percentage_of_v_out_of_control = calcular_promedio_movil(ep["percentage_of_v_out_of_control"], ventana, mode)*100
     axp.set_title('percentage_of_v_out_of_control')
     axp.plot(range(0, len(percentage_of_v_out_of_control)), percentage_of_v_out_of_control, label='v_out_con')
     axp.legend(loc='best')
+    axp.grid(True, alpha=0.3)
     figp.show()
 
 # ------ evaluación ------
@@ -376,6 +305,7 @@ elif mode == 'eval':
         for episode in file:
             eval_data.append(json.loads(episode))
     df = pd.read_csv(f'C:\\PDN_runs\\Pruebas\\results\\physical_log_{time_data}.csv') #physical_log_2026-07-27_11-36-17
+    eval_df = pd.read_csv(f'C:\\PDN_runs\\Pruebas\\results\\eval_average_voltage_{time_data}.csv')
     # agents = eval_data[0]["rewards"].keys()
     # agents = [f'agent_zone_{i + 1}' for i in range(cantidad_agentes)]
     agents = [f'agent_zone_{i + 1}' for i in range(cantidad_agentes)]
@@ -387,6 +317,8 @@ elif mode == 'eval':
     # Por step dentro de un episodio específico
     ep = df[df["episode"] == 1]  # 1 para summer, 0  para winter
     ep = ep.iloc[0:480]
+
+    eval_ep = eval_df
 
     axli[0].set_title("Voltaje de línea")
     axli[1].set_title("Potencia de línea")
@@ -430,7 +362,7 @@ elif mode == 'eval':
     figgf.show()
 
     axex.set_title('extras')
-    axex.plot(range(0, len(np.asarray(ep["percentage_of_v_out_of_control"]))), np.asarray(ep["percentage_of_v_out_of_control"]), label='v_out_con')
+    axex.plot(range(0, len(np.asarray(ep["percentage_of_v_out_of_control"]))), np.asarray(ep["percentage_of_v_out_of_control"])*100, label='v_out_con')
     # axex.plot(range(0, len(np.asarray(ep["frec"]))), np.asarray(ep["frec"]), label='frec')
     axex.set_xticks(tick_positions)
     axex.set_xticklabels(time_labels[tick_positions], rotation=45)
@@ -461,3 +393,92 @@ elif mode == 'eval':
     # Extras
     # "percentage_of_v_out_of_control"
     # "frec"
+
+    # 1. Definir los buses (ejemplo: IEEE 33 buses)
+    def extract_bus_array(data_cell):
+        # Si la celda se leyó desde CSV como string, se convierte a diccionario
+        if isinstance(data_cell, str):
+            data_cell = ast.literal_eval(data_cell)
+        # Retorna los 33 valores ordenados como numpy array
+        return np.array(list(data_cell.values()))
+
+
+    # Episodio Verano
+    avg_v_verano = extract_bus_array(eval_ep["average_voltage_by_node"].iloc[0])
+    min_v_verano = extract_bus_array(eval_ep["min_voltage_by_node"].iloc[0])
+    max_v_verano = extract_bus_array(eval_ep["max_voltage_by_node"].iloc[0])
+    # Episodio Invierno
+    # avg_v_invierno = extract_bus_array(eval_ep["average_voltage_by_node"].iloc[1])
+    # min_v_invierno = extract_bus_array(eval_ep["min_voltage_by_node"].iloc[1])
+    # max_v_invierno = extract_bus_array(eval_ep["max_voltage_by_node"].iloc[1])
+
+    num_buses = len(avg_v_verano)
+    buses = [str(i) for i in range(1, num_buses + 1)]
+    angles = np.linspace(0, 2 * np.pi, num_buses, endpoint=False).tolist()
+
+    # Cerrar los polígonos uniendo el último nodo con el primero
+    angles += angles[:1]
+    avg_v_verano = np.append(avg_v_verano, avg_v_verano[0])
+    min_v_verano = np.append(min_v_verano, min_v_verano[0])
+    max_v_verano = np.append(max_v_verano, max_v_verano[0])
+    # avg_v_invierno = np.append(avg_v_invierno, avg_v_invierno[0])
+
+    # Generar la gráfica polar comparativa
+    fig1, ax1 = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
+
+    ax1.set_theta_offset(np.pi / 2)
+    ax1.set_theta_direction(-1)
+
+    # Configurar límites radiales
+    r_min = min(min_v_verano.min(), min_v_verano.min()) - 0.02
+    r_max = max(max_v_verano.max(), max_v_verano.max()) + 0.02
+    ax1.set_rlim(r_min, r_max)
+
+    # --- PINTAR BANDAS DE VOLTAJE ---
+    theta_contour = np.linspace(0, 2 * np.pi, 500)
+
+    # Zona normal (0.95 a 1.05 pu) en verde
+    ax1.fill_between(
+        theta_contour, 0.95, 1.05, color="green", alpha=0.15, zorder=0
+    )
+
+    # Zona fuera de rango (< 0.95 y > 1.05 pu) en rojo
+    ax1.fill_between(theta_contour, r_min, 0.95, color="red", alpha=0.10, zorder=0)
+    ax1.fill_between(theta_contour, 1.05, r_max, color="red", alpha=0.10, zorder=0)
+
+    # Trazar las series de cada estación
+    ax1.plot(
+        angles,
+        avg_v_verano,
+        label="AVG - Verano",
+        color="blue",
+        linewidth=1.8,
+        zorder=2,
+    )
+    ax1.plot(
+        angles,
+        min_v_verano,
+        label="MIN - Verano",
+        color="green",
+        linewidth=1.8,
+        zorder=2,
+    )
+    ax1.plot(
+        angles,
+        max_v_verano,
+        label="MAX - Verano",
+        color="red",
+        linewidth=1.8,
+        zorder=2,
+    )
+
+    # Configurar etiquetas del eje y formato
+    ax1.set_xticks(angles[:-1])
+    ax1.set_xticklabels(buses, fontsize=8)
+    ax1.yaxis.set_major_locator(ticker.MultipleLocator(0.05))
+    ax1.yaxis.set_major_formatter(ticker.FormatStrFormatter("%.2f"))
+
+    plt.legend(loc="lower right", bbox_to_anchor=(1.25, 0.1))
+    plt.title("Perfil Promedio de Tensión por Nodo (Verano vs Invierno)", pad=20)
+    plt.tight_layout()
+    plt.show()

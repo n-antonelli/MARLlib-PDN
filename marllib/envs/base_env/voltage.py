@@ -26,7 +26,6 @@ import numpy as np
 from gym.spaces import Dict as GymDict, Box, Space
 import os
 import gymnasium
-from ray.rllib.agents.callbacks import DefaultCallbacks
 import copy
 import pandas as pd
 from datetime import datetime
@@ -77,31 +76,6 @@ def flat_dim(space: Space) -> int:
     else:
         raise NotImplementedError(f"No sé calcular dimensión de {type(space)}")
 
-
-class PowerGridCallbacks(DefaultCallbacks):
-    def __init__(self):
-        self.agent_ids = {}
-    def on_episode_end(self, *, worker, base_env, policies, episode, env_index, **kwargs):
-        # Acceder al info del último paso del episodio
-        # Suponiendo que tus agentes se llaman 'zone1', 'zone2', etc.
-        # for agent in episode.get_agents():
-        #     self.agent_ids[agent] = agent.replace("agent_", "").replace("_", "")
-        #
-        voltages = []
-        # losses = []
-        #
-        # powergrid = copy.deepcopy(worker.env.env.powergrid)
-        #
-        # for aid in self.agent_ids.keys():
-        #     last_info = episode.last_info_for(aid)
-        #     if last_info and "mean_voltage" in last_info:
-        #         voltages.append(last_info["mean_voltage"])
-        #         losses.append(last_info["power_loss"])
-        #
-        # # Guardar en custom_metrics (esto es lo que aparece en progress.csv)
-        # if voltages:
-        #     episode.custom_metrics["v_mean_system"] = np.mean(voltages)
-        #     episode.custom_metrics["p_loss_total"] = np.sum(losses)
 
 class RLlibVoltageControl(MultiAgentEnv):
 
@@ -234,14 +208,16 @@ class RLlibVoltageControl(MultiAgentEnv):
         # self.physical_data = {}
 
         self.episode_buffer = []
+        self.eval_episode_buffer = []
         self.episode_count = 0
+        self.episode_voltages = []
 
 
         carpeta_resultados = "C:/PDN_runs/Pruebas/results"
         os.makedirs(carpeta_resultados, exist_ok=True)
         # os.makedirs("results", exist_ok=True)
-        timestamp = datetime.now().strftime("%Y-%m-%d.%H-%M-%S")
-        self.log_path = os.path.join(carpeta_resultados, f"physical_log_{timestamp}.csv")  #f"log_worker_{os.getpid()}.csv") / f"physical_log_{timestamp}.csv"
+        self.timestamp = datetime.now().strftime("%Y-%m-%d.%H-%M")
+        self.log_path = os.path.join(carpeta_resultados, f"physical_log_{self.timestamp}.csv")  #f"log_worker_{os.getpid()}.csv") / f"physical_log_{timestamp}.csv"
         # self.log_path = f"results/physical_log.csv"
         if self.env_config["train_eval"] == "eval":
             self.eval_data = {}
@@ -251,17 +227,21 @@ class RLlibVoltageControl(MultiAgentEnv):
             self.eval_data['voltage'] = []
 
     def reset(self):
-        # Escribir a CSV solo al final del episodio
-        if self.episode_buffer:
-            df = pd.DataFrame(self.episode_buffer)
-            write_header = not os.path.exists(self.log_path)
-            df.to_csv(self.log_path, mode="a", header=write_header, index=False)
-            self.episode_buffer = []
-            self.episode_count += 1
-            if self.env_config["train_eval"] == "eval":
-                self.eval_data = df
+        # # Escribir a CSV solo al final del episodio
+        # if self.episode_buffer:
+        #     df = pd.DataFrame(self.episode_buffer)
+        #     write_header = not os.path.exists(self.log_path)
+        #     df.to_csv(self.log_path, mode="a", header=write_header, index=False)
+        #     self.episode_buffer = []
+        #     self.episode_count += 1
+        #     if self.env_config["train_eval"] == "eval":
+        #         self.eval_data = df
+
+        # Escribir a CSV el episodio anterior si existe buffer pendiente
+        self._flush_buffer()
 
         o, s = self.env.reset()
+        self.current_step = 0  # Reiniciar contador de pasos del episodio
         obs = {}
         for index, agent in enumerate(self.agents):
             obs[agent] = {
@@ -303,11 +283,12 @@ class RLlibVoltageControl(MultiAgentEnv):
         # Acumular datos físicos en memoria
         self.episode_buffer.append({
             "episode": self.episode_count,
+            "step": self.current_step,
             # Datos de las líneas
             "v_mean_bus": float(self.env.powergrid.res_bus["vm_pu"].mean()),
             "v_min": float(self.env.powergrid.res_bus["vm_pu"].min()),
             "v_max": float(self.env.powergrid.res_bus["vm_pu"].max()),
-            "va_degree_bus": float(self.env.powergrid.res_bus["va_degree"].mean()),
+            # "va_degree_bus": float(self.env.powergrid.res_bus["va_degree"].mean()),
             "power_p_bus": float(self.env.powergrid.res_bus["p_mw"].mean()),
             "power_q_bus": float(self.env.powergrid.res_bus["q_mvar"].mean()),
             # Datos de las pérdidas en la línea
@@ -326,10 +307,49 @@ class RLlibVoltageControl(MultiAgentEnv):
             "load_q": float(self.env.powergrid.load["q_mvar"].sum()),
             # Extras
             "percentage_of_v_out_of_control": float(info["percentage_of_v_out_of_control"].mean()),
-            "frec": float(self.env.powergrid.f_hz),
+            "total_line_loss": info["total_line_loss"],
+            "totally_controllable_ratio": info["totally_controllable_ratio"],
+            # "frec": float(self.env.powergrid.f_hz),
         })
+        if self.env_config["train_eval"] == "eval":
+            self.episode_voltages.append(self.env.powergrid.res_bus["vm_pu"].copy())
+
+            if self.current_step > 478:
+                avg_v_series = pd.concat(self.episode_voltages, axis=1).mean(axis=1)
+                max_v_series = pd.concat(self.episode_voltages, axis=1).max(axis=1)
+                min_v_series = pd.concat(self.episode_voltages, axis=1).min(axis=1)
+                self.eval_episode_buffer.append({
+                    "episode": self.episode_count,
+                    "average_voltage_by_node": avg_v_series.to_dict(),
+                    "max_voltage_by_node": max_v_series.to_dict(),
+                    "min_voltage_by_node": min_v_series.to_dict()
+                })
+
+        self.current_step += 1
         return obs, rewards, dones, {}
 
+    def _flush_buffer(self):
+        """Volcar el buffer acumulado al archivo CSV."""
+        if self.episode_buffer:
+            df = pd.DataFrame(self.episode_buffer)
+
+            # Crear directorio si no existe
+            log_dir = os.path.dirname(self.log_path)
+            if log_dir:
+                os.makedirs(log_dir, exist_ok=True)
+
+            write_header = not os.path.exists(self.log_path)
+            df.to_csv(self.log_path, mode="a", header=write_header, index=False)
+
+            if self.env_config.get("train_eval") == "eval":
+                eval_df = pd.DataFrame(self.eval_episode_buffer)
+                if log_dir:
+                    os.makedirs(log_dir, exist_ok=True)
+                eval_write_header = not os.path.exists(f'C:/PDN_runs/Pruebas/results/eval_average_voltage{self.timestamp}.csv')
+                eval_df.to_csv(f'C:/PDN_runs/Pruebas/results/eval_average_voltage_{self.timestamp}.csv', mode="a", header=eval_write_header, index=False)
+
+        self.episode_buffer = []
+        self.episode_count += 1
     def close(self):
         self.env.close()
 

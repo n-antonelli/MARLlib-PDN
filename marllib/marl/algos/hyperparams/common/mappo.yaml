@@ -32,8 +32,8 @@ algo_args:
   lr: 0.00005  # 0.0001
   lr_schedule: [
       [0, 0.00005],         # inicio
-      [150000, 0.00007],    # mitad del entrenamiento - 312,5 episodios
-      [1500000, 0.00001],   # final - 3.125 episodios
+      [240000, 0.00002],    # mitad del entrenamiento - 500 episodios
+      [1500000, 0.000005],   # final - 3.125 episodios
   ]
   gamma: 0.995  # 0.98
   num_sgd_iter: 5  # 10
@@ -52,8 +52,8 @@ algo_args:
   entropy_coeff: 0.01  # 0.01
   "entropy_coeff_schedule": [
     [ 0, 0.01 ],  # entropía alta(mucha exploración)
-    [ 576000 * 0.5, 0.001 ],  # A la mitad, bajamos bastante - 600 episodios
-    [ 576000, 0.00001 ],  # Al final, casi cero(pura explotación) - 1.200 episodios
+    [ 288000 * 0.5, 0.001 ],  # A la mitad, bajamos bastante - 300 episodios
+    [ 288000, 0.00001 ],  # Al final, casi cero(pura explotación) - 600 episodios
   ]
   # PDN
 #  kl_coeff: 0.2

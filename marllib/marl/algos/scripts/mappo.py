@@ -113,7 +113,7 @@ def run_mappo(model: Any, exp: Dict, run: Dict, env: Dict,
     RUNNING_NAME = '_'.join([algorithm, arch, map_name])
     model_path = restore_model(restore, exp)
     short_map_name = exp["env_args"]["short_map_name"]
-    timestamp = datetime.now().strftime("%Y-%m-%d.%H-%M-%S")
+    timestamp = datetime.now().strftime("%Y-%m-%d.%H-%M")
 
     def custom_dirname_creator(trial):
         return f"{algorithm}_{short_map_name}_{timestamp}"

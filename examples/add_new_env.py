@@ -45,13 +45,13 @@ import ray.rllib.utils.torch_ops as torch_ops
 import ray.rllib.policy.torch_policy as torch_policy
 import torch
 import tree
-
+from ray.rllib.agents.callbacks import DefaultCallbacks
 
 # os.environ["TORCH_CUDA_ARCH_LIST"] = "12.0"
 mode = 'train'  # eval/train
 eval_season = 'alternate'  # alternate/winter/summer
-path = "mappo_33_3_2026-08-28.10-11"
-num_chec = 4300
+path = "mappo_33_3_2026-09-16.12-41"
+num_chec = 3800
 check = f"checkpoint_{str(num_chec).zfill(6)}"
 # register all scenario with env class
 REGISTRY = {}
@@ -74,6 +74,25 @@ policy_mapping_dict = {
         "one_agent_one_policy": True,
     },
 }
+
+class GridValidationCallbacks(DefaultCallbacks):
+    def __init__(self):
+        self.agent_ids = {}
+    def on_train_result(self, *, algorithm, result, **kwargs):
+        # Verificar si en esta iteración se ejecutó evaluación
+        if "evaluation" in result and "episode_reward_mean" in result["evaluation"]:
+            eval_reward = result["evaluation"]["episode_reward_mean"]
+            train_reward = result["episode_reward_mean"]
+            print(f"\n--- EVALUACIÓN ---", flush=True)
+            print(f"Reward Promedio Entrenar: {train_reward:.2f}", flush=True)
+            print(f"Reward Promedio Validar:  {eval_reward:.2f}\n", flush=True)
+    # def on_episode_end(self, *, worker, base_env, policies, episode, env_index, **kwargs):
+    #     # Recuperar el 'info' devuelto por el entorno al final del episodio
+    #     info = episode.last_info_for()
+    #     if info and "voltage_violation_rate" in info:
+    #         # Registrar en TensorBoard / Ray Tune
+    #         episode.custom_metrics["val_voltage_violation_rate"] = info["voltage_violation_rate"]
+
 
 # must inherited from MultiAgentEnv class
 class RLlibMAGym(MultiAgentEnv):
@@ -155,6 +174,18 @@ if __name__ == '__main__':
                 "MADDPG": marl.algos.maddpg
                 }
     if mode == 'train':
+        # Configuración del sistema de validación
+        rllib_config = {
+            "evaluation_interval": 20,  # Evaluar cada 5 iteraciones de entrenamiento
+            "evaluation_duration": 2,  # Ejecutar 10 episodios por cada evaluación
+            "evaluation_num_workers": 1,  # Proceso/worker reservado exclusivamente para evaluar
+            "evaluation_parallel_to_training": True,
+            "callbacks": GridValidationCallbacks,
+            "evaluation_config": {
+                "explore": False,  # Evaluación determinista (desactiva el ruido de exploración)
+            }
+        }
+
         # pick algorithms
         algo = eleccion[algoritmo](hyperparam_source="common")
         # customize model
@@ -163,6 +194,7 @@ if __name__ == '__main__':
         # start learning
         algo.fit(env, model, stop={'episode_reward_mean': -1, 'timesteps_total': 10000000},
                  share_policy='individual', checkpoint_freq=100, num_to_keep=2,
+                 rllib_config=rllib_config
                  )
 
     # elif mode == 'eval':

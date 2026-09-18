@@ -122,7 +122,7 @@ class VoltageControl(MultiAgentEnv):
         # define action space and observation space
         self.action_space = ActionSpace(low=-self.args.action_scale+self.args.action_bias, high=self.args.action_scale+self.args.action_bias)
         self.history = getattr(args, "history", 1)
-        self.state_space = getattr(args, "state_space", ["pv", "demand", "reactive", "vm_pu", "va_degree"])
+        self.state_space = getattr(args, "state_space", ["pv", "demand", "reactive", "vm_pu", "va_degree", "q-1"])
         if self.args.mode == "distributed":
             self.n_actions = 1
             self.n_agents = len(self.base_powergrid.sgen)
@@ -133,11 +133,12 @@ class VoltageControl(MultiAgentEnv):
         ###############
         # original
         # self.obs_size = agents_obs[0].shape[0]
+        # self.state_size = state.shape[0]
         # Modificar: utilizar el tamaño del que mayor observación tenga!
         # obs con distintos tamaños
         self.obs_size = [len(agents_obs[i]) for i in range(self.n_agents)]
+        self.state_size = len(state) if isinstance(state, list) else state.shape[0]
         ###############
-        self.state_size = state.shape[0]
         self.last_v = self.powergrid.res_bus["vm_pu"].sort_index().to_numpy(copy=True)
         self.last_q = self.powergrid.sgen["q_mvar"].to_numpy(copy=True)
 
@@ -149,6 +150,12 @@ class VoltageControl(MultiAgentEnv):
         self.max_l_seen = 1e-6
         self.max_q_seen = 1e-6
         self.prev_actions = {}
+
+        for i in range(self.n_agents):
+            zone_res_buses = self.powergrid.res_bus.sort_index().loc[self.powergrid.bus["zone"] == f"zone{i + 1}"]
+
+        num_sgens = len(self.powergrid.sgen)
+        self.prev_q = {}
 
     def reset(self, reset_time=True):
         """reset the env
@@ -195,6 +202,12 @@ class VoltageControl(MultiAgentEnv):
                 print (f"This is the res_bus: \n{self.powergrid.res_bus}")
                 solvable = False
         self.prev_actions = {}
+        self.prev_q = dict()
+        for i in range(self.n_agents):
+            zone_key = f"zone{i + 1}"
+            sgens_in_zone = self.powergrid.sgen.loc[self.powergrid.sgen["name"] == zone_key]
+            # Crea un arreglo de ceros del tamaño de sgens que pertenecen a esa zona
+            self.prev_q[zone_key] = np.zeros(len(sgens_in_zone), dtype=np.float32)
 
         return self.get_obs(), self.get_state()
     
@@ -304,7 +317,10 @@ class VoltageControl(MultiAgentEnv):
         # Cargar la demanda y fotovoltaica para el SIGUIENTE paso (t + 1)
         if not terminated:
             self._set_demand_and_pv(add_noise=add_noise)
-
+        # Guardar q previo
+        for i in range(self.n_agents):
+            self.prev_q[f"zone{i + 1}"] = self.powergrid.sgen["q_mvar"].loc[self.powergrid.sgen["name"] == f"zone{i + 1}"]
+        # self.prev_q = list(self.powergrid.sgen["q_mvar"].sort_index().to_numpy(copy=True))
         # if terminated:
         #     print (f"Episode terminated at time: {self.steps} with return: {self.sum_rewards:2.4f}.")
 
@@ -326,6 +342,27 @@ class VoltageControl(MultiAgentEnv):
             state += list(self.powergrid.res_bus["vm_pu"].sort_index().to_numpy(copy=True))
         if "va_degree" in self.state_space:
             state += list(self.powergrid.res_bus["va_degree"].sort_index().to_numpy(copy=True))
+        if "prev_q" in self.state_space:
+            prev_q_flat = []
+
+            if hasattr(self, "prev_q") and isinstance(self.prev_q, dict) and len(self.prev_q) > 0:
+                # Recorrer ordenadamente las zonas para mantener la consistencia dimensional
+                for i in range(self.n_agents):
+                    zone_key = f"zone{i + 1}"
+                    if zone_key in self.prev_q:
+                        val = self.prev_q[zone_key]
+                        # Extraer valores si es un Pandas Series, NumPy array o un escalar
+                        if hasattr(val, "to_numpy"):
+                            prev_q_flat.extend(val.to_numpy(copy=True).tolist())
+                        elif isinstance(val, (list, np.ndarray)):
+                            prev_q_flat.extend(list(val))
+                        else:
+                            prev_q_flat.append(float(val))
+                state += prev_q_flat
+            else:
+                # Fallback de ceros con la cantidad total real de sgens en la red
+                num_sgens = len(self.powergrid.sgen)
+                state += [0.0] * num_sgens
         state = np.array(state)
         return state
     
@@ -344,7 +381,7 @@ class VoltageControl(MultiAgentEnv):
                 obs = list()
                 zone_buses, zone, pv, q, sgen_bus = clusters[f"sgen{i}"]
                 zone_list.append(zone)
-                if not( zone in obs_zone_dict.keys() ):
+                if not (zone in obs_zone_dict.keys()):
                     if "demand" in self.state_space:
                         copy_zone_buses = copy.deepcopy(zone_buses)
                         copy_zone_buses.loc[sgen_bus]["p_mw"] += pv
@@ -366,14 +403,14 @@ class VoltageControl(MultiAgentEnv):
             obs_max_len = max(obs_len_list)
             for zone in zone_list:
                 obs_zone = obs_zone_dict[zone]
-                pad_obs_zone = np.concatenate( [obs_zone, np.zeros(obs_max_len - obs_zone.shape[0])], axis=0 )
+                pad_obs_zone = np.concatenate([obs_zone, np.zeros(obs_max_len - obs_zone.shape[0])], axis=0)
                 agents_obs.append(pad_obs_zone)
         ###########
         # observaciones diferentes tamaños
         elif self.args.mode == "decentralised":
             zone_obs_list = list()
             for i in range(self.n_agents):  # Para cada agente
-                zone_buses, pv, q, sgen_buses = clusters[f"zone{i + 1}"]
+                zone_buses, pv, q, sgen_buses, prev_q = clusters[f"zone{i + 1}"]
                 obs = list()
                 if "demand" in self.state_space:
                     copy_zone_buses = copy.deepcopy(zone_buses)
@@ -389,11 +426,12 @@ class VoltageControl(MultiAgentEnv):
                     obs += list(zone_buses.loc[:, "vm_pu"].to_numpy(copy=True))
                 if "va_degree" in self.state_space:
                     obs += list(zone_buses.loc[:, "va_degree"].to_numpy(copy=True) * np.pi / 180)
+                if "prev_q" in self.state_space:
+                    obs += list(np.copy(prev_q))
 
-                # Guardamos la observación original SIN padding
+                # Guardamos la observación original
                 zone_obs_list.append(np.array(obs))
 
-            # Eliminamos el bloque de 'obs_max_len' y el loop de concatenación de ceros
             # agents_obs ahora es directamente la lista de observaciones reales
             agents_obs = zone_obs_list
 
@@ -718,7 +756,8 @@ class VoltageControl(MultiAgentEnv):
                 sgen_res_buses = self.powergrid.sgen["bus"].loc[self.powergrid.sgen["name"] == f"zone{i + 1}"]
                 pv = self.powergrid.sgen["p_mw"].loc[self.powergrid.sgen["name"] == f"zone{i + 1}"]
                 q = self.powergrid.sgen["q_mvar"].loc[self.powergrid.sgen["name"] == f"zone{i + 1}"]
-                clusters[f"zone{i + 1}"] = (zone_res_buses, pv, q, sgen_res_buses)
+                prev_q = self.prev_q[f"zone{i + 1}"]
+                clusters[f"zone{i + 1}"] = (zone_res_buses, pv, q, sgen_res_buses, prev_q)
 
         return clusters
     
@@ -847,13 +886,17 @@ class VoltageControl(MultiAgentEnv):
         v_losses = {}
         line_losses = {}
         q_losses = {}
+        q_values = {}
 
         zones = [f"zone{i}" for i in range(1, self.n_agents + 1)] + ["main"]
 
         for zone in zones:
             # --- Cálculo de V-Loss ---
             v_zone = self.powergrid.res_bus["vm_pu"].loc[self.powergrid.bus["zone"] == zone]
-            v_losses[zone] = np.mean(self.voltage_barrier.step(v_zone))
+            # v_losses[zone] = np.mean(self.voltage_barrier.step(v_zone))
+            v_barrier_values = self.voltage_barrier.step(v_zone)
+            # effective_losses = np.maximum(0.0, v_barrier_values - 0.05) #
+            v_losses[zone] = np.max(v_barrier_values)
 
             # --- Cálculo de Line-Loss (con mapeo to_bus para evitar el error 33 vs 32) ---
             buses_in_zone = self.powergrid.bus.index[self.powergrid.bus["zone"] == zone]
@@ -863,6 +906,7 @@ class VoltageControl(MultiAgentEnv):
             # --- Cálculo de Q-Loss (Sgen) ---
             q_vals = self.powergrid.res_sgen["q_mvar"].loc[self.powergrid.sgen["name"] == zone]
             # Manejo de NaNs: si no hay sgen o es NaN, ponemos 0.0
+            q_values[zone] = self.powergrid.res_sgen["q_mvar"].loc[self.powergrid.sgen["name"] == zone]
             q_losses[zone] = np.nan_to_num(np.mean(np.abs(q_vals))) if not q_vals.empty else 0.0  # TODO: verificar si conviene sacar el abs (capacitivo=inductivo)
 
         if np.isnan(q_losses["main"]):
@@ -903,31 +947,43 @@ class VoltageControl(MultiAgentEnv):
             #
             # reward[agent_name] = -float(loss)
             # 1. Definir bases fijas de normalización (evitar max_seen dinámicos)
-            Q_BASE_MVAR = 2.0  # Capacidad máxima esperada por zona en MVAR
-            Line_BASE = 0.4  # Máxima pérdida esperada promedio
+            V_BASE = 0.05
+            Q_BASE_MVAR = 8.0  # Capacidad máxima esperada por zona en MVAR
+            DQ_BASE_MVAR = 0.60 # Máxima variación esperada por zona en MVAR
+            Line_BASE = 0.5  # Máxima pérdida esperada promedio
 
-            # Pérdida de Tensión (usar barrier directa sin dividir por max_v)
-            v_total = v_losses[zone_id] + v_losses["main"] * self.main_weight
-            v_scaled = v_total
+            # Prueba de losses escalados antes de la suma
+            # --- 1. Pérdida de Tensión (Normalizar por separado) ---
+            v_zone_scaled = v_losses[zone_id] / V_BASE
+            v_main_scaled = v_losses["main"] / V_BASE
+            v_scaled = v_zone_scaled + self.main_weight * v_main_scaled
 
-            # Pérdida de Línea
-            line_total = line_losses[zone_id] + line_losses["main"] * self.main_weight
-            line_scaled = (line_total / Line_BASE) ** 2  # Penaliza cuadráticamente picos de Q
+            # --- 2. Pérdida de Línea (Elevar al cuadrado individualmente) ---
+            line_zone_scaled = (line_losses[zone_id] / Line_BASE) ** 2
+            line_main_scaled = (line_losses["main"] / Line_BASE) ** 2
+            line_scaled = line_zone_scaled + self.main_weight * line_main_scaled
 
-            # Pérdida de Reactiva (normalizada por base fija, penalización cuadrática)
-            q_total = q_losses[zone_id] + q_losses["main"] * self.main_weight
-            q_scaled = (q_total / Q_BASE_MVAR) ** 2  # Penaliza cuadráticamente picos de Q
+            # --- 3. Pérdida de Reactiva (Elevar al cuadrado individualmente) ---
+            q_zone_scaled = (q_losses[zone_id] / Q_BASE_MVAR) ** 2
+            q_main_scaled = (q_losses["main"] / Q_BASE_MVAR) ** 2
+            q_scaled = q_zone_scaled + self.main_weight * q_main_scaled
 
-            # Penalización por suavizado / variación de acción (evita oscilaciones bang-bang)
-            q_action_curr = action_dict[agent_name]  # Consigna actual
-            q_action_prev = self.prev_actions.get(agent_name, q_action_curr)
-            delta_q_loss = np.mean((q_action_curr - q_action_prev) ** 2)
-            self.prev_actions[agent_name] = q_action_curr
 
-            # Cálculo final del Loss
-            # self.dq_dv_weight = 0.2  # Asignar peso a la variación brusca
-            # self.q_weight = 0.3  # Subir peso de Q (ej. 0.3)
-
+            # # Pérdida de Tensión (usar barrier directa sin dividir por max_v)
+            # v_total = v_losses[zone_id] + v_losses["main"] * self.main_weight
+            # v_scaled = v_total / V_BASE
+            # # Pérdida de Línea
+            # line_total = line_losses[zone_id] + line_losses["main"] * self.main_weight
+            # line_scaled = (line_total / Line_BASE) ** 2  # Penaliza cuadráticamente picos de Q
+            # # Pérdida de Reactiva (normalizada por base fija, penalización cuadrática)
+            # q_total = q_losses[zone_id] + q_losses["main"] * self.main_weight
+            # q_scaled = (q_total / Q_BASE_MVAR) ** 2  # Penaliza cuadráticamente picos de Q
+            # # Penalización por suavizado / variación de acción (evita oscilaciones bang-bang)
+            q_action_curr = np.max(q_values[zone_id])
+            q_action_prev = self.prev_actions.get(zone_id, q_action_curr)
+            delta_q_loss = (q_action_curr - q_action_prev)
+            delta_q_scaled = (delta_q_loss / DQ_BASE_MVAR) ** 2
+            self.prev_actions[zone_id] = q_action_curr
             if self.line_weight != None:
                 line_loss = line_scaled * self.line_weight
             else:
@@ -936,12 +992,13 @@ class VoltageControl(MultiAgentEnv):
                 q_loss = q_scaled * self.q_weight
             else:
                 q_loss = 0
+            v_loss = v_scaled * self.voltage_weight
+            delta_q_loss = delta_q_scaled * self.dv_dq_weight
 
-
-            loss = (v_scaled * self.voltage_weight) + \
+            loss = (v_loss) + \
                    line_loss + \
                    q_loss + \
-                   (delta_q_loss * self.dv_dq_weight)
+                   (delta_q_loss)
 
             reward[agent_name] = -float(loss)
 

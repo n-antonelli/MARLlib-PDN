@@ -26,7 +26,6 @@ from ray import tune
 from ray.rllib.utils.framework import try_import_tf, try_import_torch
 from marllib.marl.algos.scripts import POlICY_REGISTRY
 from marllib.marl.common import recursive_dict_update, dict_update
-from marllib.envs.base_env.voltage import PowerGridCallbacks
 import os
 
 torch, nn = try_import_torch()
@@ -215,7 +214,7 @@ def run_cc(exp_info, env, model, stop=None):
             "policies_to_train": policy_ids,
         },
         "framework": exp_info["framework"],
-        "evaluation_interval": exp_info["evaluation_interval"],
+        # "evaluation_interval": exp_info["evaluation_interval"],
         "simple_optimizer": False,  # force using better optimizer
         # "callbacks": PowerGridCallbacks,
         # "trial_dirname_creator": custom_dirname_creator,
